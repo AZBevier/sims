@@ -89,11 +89,6 @@ extern uint32   M[];                        /* our memory */
 extern uint32   SPAD[];                     /* CPU scratchpad memory */
 extern uint32   CPUSTATUS;                  /* CPU status word */
 extern uint32   INTS[];                     /* Interrupt status flags */
-<<<<<<< HEAD
-//extern uint16   ccw_count[];
-=======
-extern uint16   ccw_count[];
->>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 extern int traceme, trstart;
 
 #if 0
