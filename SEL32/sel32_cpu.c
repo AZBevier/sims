@@ -161,7 +161,11 @@
 
 /* CPU registers, map cache, spad, and other variables */
 int traceme = 0;        /* dynamic trace function */
+<<<<<<< HEAD
 int trstart = 8000000;        /* count of when to start tracing */
+=======
+int trstart = 9981910;  /* count of when to start tracing */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 //int trstart = 37; /* count of when to start tracing */
 int             cpu_index;                  /* Current CPU running */
 uint32          PSD[2];                     /* the PC for the instruction */
@@ -722,19 +726,31 @@ t_stat load_maps(uint32 thepsd[2])
         }
         /* num should be even at this point, so zero 32 bit word for remaining maps */
         if ((num/2) > HIWM)             /* largerst number of maps loaded so far* */
+<<<<<<< HEAD
             HIWM = num/2;               /* yes, set new high water mark */
 //      for (i = num/2; i < 32/2; i++)  /* zero any remaining entries */
         for (i = num/2; i < HIWM; i++)  /* zero any remaining entries */
             MAPC[i] = 0;                /* clear the map entry to make not valid */
         HIWM = num/2;                   /* set new high water mark */
+=======
+            HIWM = num/2;               /* yes, set new high watter mark */
+//      for (i = num/2; i < 32/2; i++)  /* zero any remaining entries */
+        for (i = num/2; i < HIWM; i++)  /* zero any remaining entries */
+            MAPC[i] = 0;                /* clear the map entry to make not valid */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
         return ALLOK;                   /* all cache is loaded, return OK */
     }
     else
     {
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
         char n[9];
         uint32 dqe;
 #endif
+=======
+        char n[9];
+        uint32 dqe;
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
         /* 32/27, 32/67, 32/87, 32/97 2KW maps */
         /* Concept/32 machine, 2KW maps */
         if ((modes & MAPMODE) == 0) {       /* mapped mode? */
@@ -747,11 +763,15 @@ t_stat load_maps(uint32 thepsd[2])
         /* master process list is in 0xf3 of spad for concept */
         mpl = SPAD[0xf3] >> 2;          /* get mpl from spad address */
         midl = M[mpl+cpix];             /* get mpl entry wd 0 for given cpix */
+<<<<<<< HEAD
         msdl = M[mpl+cpix+1];           /* get mpl entry wd 1 for given cpix */
 
 #if 0  /* set to 1 for traceme to work */
 //traceme = trstart;
 if (traceme >= trstart) {
+=======
+        msdl = M[mpl+cpix+1];           /* get mpl entry wd 0 for given cpix */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
         dqe = M[0x8e8>>2];
         for (j=0; j<8; j++) {
             n[j] = (M[((dqe+0x18)>>2)+(j/4)] >> ((3-(j&7))*8)) & 0xff;
@@ -759,6 +779,7 @@ if (traceme >= trstart) {
                 n[j] = 0x20;
         }
         n[8] = 0;
+<<<<<<< HEAD
         fprintf(stderr, "\r\nmapping SPAD[0xf3] %x mpl %x mpl0 %x mpl1 %x midl %x msdl %x cpix %x\r\n",
           SPAD[0xf3], mpl<<2, M[mpl], M[mpl+1], midl, msdl, cpix<<2);
         fprintf(stderr, "mapping SPAD PSD2 %.8x PSD2 %x mpl %x osmidl %x osmidl2 %x umidl %x C.CURR %x LMN %s\r\n",
@@ -780,6 +801,18 @@ if (traceme >= trstart) {
             fprintf(stderr, "mapping osmidl %x spc %x osmsdl %x usermidl %x\r\n", osmidl, spc, M[mpl+1], midl);
 #endif
             if (osmidl & BIT0) {        /* see if O/S already loaded */
+=======
+//      fprintf(stderr, "mapping SPAD PSD2 %.8x PSD2 %x mpl %x osmidl %x umidl %x C.CURR %x LMN %s\r\n",
+//          SPAD[0xf5], PSD2, mpl, M[mpl], midl, dqe, n);
+        /* if bit zero of mpl entry is set, use msd entry 0 first to load maps */
+        if (midl & BIT0)
+        {
+/* TODO do not load O/S if already loaded. Bit zero of O/S midl will be set by swapper */
+            /* load msd 0 maps first (O/S) */
+            osmidl = M[mpl];            /* get midl 0 word address */
+            spc = osmidl & MASK16;      /* get 16 bit segment description count */
+            if (osmidl & BIT0) {        /* see f O/S already loaded */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                 num = spc;              /* set the number of o/s maps loaded */
                 goto skipos;            /* skip load */
             }
@@ -799,12 +832,17 @@ if (traceme >= trstart) {
                 if (num & 1) {
                     /* entry going to rt hw, clean it first */
                     map = (MAPC[num/2] & LMASK) | map;  /* map is in rt hw */
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
 if (traceme >= trstart) {
                   fprintf(stderr, "mapping 0x%x O/S num 0x%x midl %x MAPC[%d] %x\r\n",
                       spc, num-1, (midl+(j/2))<<2, num/2, map);
 }
 #endif
+=======
+//                  fprintf(stderr, "mapping 0x%x O/S num 0x%x midl %x MAPC[%d] %x\r\n",
+//                      spc, num-1, (midl+(j/2))<<2, num/2, map);
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                 }
                 else {
                     /* entry going to left hw, clean it first */
@@ -814,6 +852,7 @@ if (traceme >= trstart) {
                 if (++num >= 2048)
                     return MAPFLT;          /* map loading overflow, map fault error */
             }
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
 if (traceme >= trstart) {
             if (num & 1)
@@ -829,13 +868,25 @@ skipos:
         if (cpix == 0)
             goto skipcpix;              /* only load maps specified by msd 0 */
 
+=======
+#if 0
+            if (num & 1)
+                fprintf(stderr, "mapping 0x%x O/S num 0x%x midl %x MAPC[%d] %x\r\n",
+                    spc, num-1, (midl+((spc-1)/2))<<2, num/2, map);
+#endif
+        }
+skipos:
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
         /* now load cpix maps */
         midl = M[mpl+cpix];             /* get cpix midl word address */
         msdl = M[mpl+cpix+1];           /* get 24 bit real word address of midl */
         spc = midl & RMASK;             /* get segment page count from msdl */
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
             fprintf(stderr, "mapping usmidl %x spc %x msdl %x\r\n", midl, spc, msdl);
 #endif
+=======
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
         midl = M[mpl+cpix+1] & MASK24;  /* get 24 bit real word address of midl */
         midl = midl>>2;                 /* get word address of midl */
         for (j = 0; j < spc; j++)
@@ -852,12 +903,17 @@ skipos:
             if (num & 1) {
                 /* entry going to rt hw, clean it first */
                 map = (MAPC[num/2] & LMASK) | map;  /* map is in rt hw */
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
 if (traceme >= trstart) {
               fprintf(stderr, "mapping 0x%x USER num 0x%x midl %x MAPC[%d] %x\r\n",
                   spc, num-1, (midl+(j/2))<<2, num/2, map);
 }
 #endif
+=======
+//              fprintf(stderr, "mapping 0x%x USER num 0x%x midl %x MAPC[%d] %x\r\n",
+//                  spc, num-1, (midl+(j/2))<<2, num/2, map);
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
             }
             else {
                 /* entry going to left hw, clean it first */
@@ -871,6 +927,7 @@ if (traceme >= trstart) {
         /* we got here without map block found, return map fault error */
         if (num == 0)
             return MAPFLT;                  /* map fault error */
+<<<<<<< HEAD
 skipcpix:
         if (num & 1) {
             /* left hw of map is good, zero right */
@@ -891,6 +948,22 @@ if (traceme >= trstart) {
         for (i = num/2; i < HIWM; i++)      /* zero any remaining entries */
             MAPC[i] = 0;                    /* clear the map entry to make not valid */
         HIWM = num/2;                       /* set new high water mark */
+=======
+        if (num & 1) {
+            /* left hw of map is good, zero right */
+            map = (MAPC[num/2] & LMASK);    /* clean rt hw */
+//      if (spc != 0)
+//          fprintf(stderr, "mapping 0x%x USER num 0x%x midl %x MAPC[%d] %x\r\n",
+//              spc, num-1, (midl+((spc-1)/2))<<2, num/2, map);
+            MAPC[num++/2] = map;            /* store the map reg contents into cache */
+        }
+        /* num should be even at this point, so zero 32 bit words for remaining maps */
+        if ((num/2) > HIWM)                 /* largerst number of maps loaded so far* */
+            HIWM = num/2;                   /* yes, set new high watter mark */
+//      for (i = num/2; i < 2048/2; i++)    /* zero any remaining entries */
+        for (i = num/2; i < HIWM; i++)      /* zero any remaining entries */
+            MAPC[i] = 0;                    /* clear the map entry to make not valid */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
         return ALLOK;                       /* all cache is loaded, retun OK */
     }
 }
@@ -1374,7 +1447,11 @@ exec:
                         t &= ~IND;              /* turn off IND bit to stop while loop */
                     } else {
                         /* non-extended mode, process new X, I, ADDR fields */
+<<<<<<< HEAD
 //           fprintf(stderr, "Indirect NE before addr %x contents %x\n", addr, temp);
+=======
+//                      fprintf(stderr, "Indirect NE before addr %x contents %x\n", addr, temp);
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                         addr = temp & MASK19;   /* get just the addr */
                         ix = (temp >> 21) & 3;  /* get the index reg from indirect word */
                         if (ix != 0)
@@ -1382,7 +1459,11 @@ exec:
                         /* if no F or C bits set, use original, else new */
                         if ((temp & F_BIT) || (addr & 3)) 
                             FC = ((temp & F_BIT) ? 0x4 : 0) | (addr & 3);
+<<<<<<< HEAD
  //          fprintf(stderr, "Indirect NE after addr %x temp %x\n", addr, temp);
+=======
+//                      fprintf(stderr, "Indirect NE after addr %x temp %x\n", addr, temp);
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                         t = temp;                   /* go process next indirect location */
                     }
                 } 
@@ -1508,9 +1589,13 @@ exec:
                             TRAPME = PRIVHALT_TRAP; /* set the trap to take */
                             goto newpsd;            /* Privlege mode halt trap */
                         }
+<<<<<<< HEAD
                         /*FIXME*/
                         reason = STOP_HALT;         /* do halt for now */
                         return STOP_HALT;           /* exit to simh for halt */
+=======
+/*FIXME*/               reason = STOP_HALT;         /* do halt for now */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                         break;
                 case 0x1:   /* WAIT */
                         if (modes & PRIVBIT == 0) { /* must be privileged to wait */
@@ -1679,6 +1764,10 @@ sacz:                                           /* non basemode SCZ enters here 
                 break;
 
         case 0x14>>2:               /* 0x14 HLF - HLF */ /* CMR compare masked with reg */
+<<<<<<< HEAD
+=======
+    //FIXME CMD needs both regs to be masked with R4
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                 temp = GPR[reg] ^ GPR[sreg];    /* exclusive or src and destination values */
                 temp &= GPR[4];                 /* and with mask reg (GPR 4) */
                 CC = 0;                         /* set all CCs zero */
@@ -2673,8 +2762,12 @@ src:
                     goto newpsd;                /* memory read error or map fault */
 
                 IR = temp;                      /* get instruction from memory */
+<<<<<<< HEAD
 //                if (FC == 2)                    /* see if right halfword specified */
                 if (FC == 3)                    /* see if right halfword specified */
+=======
+                if (FC == 2)                    /* see if right halfword specified */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                     IR <<= 16;                  /* move over the HW instruction */
                 if ((IR & 0xFC7F0000) == 0xC8070000 ||
                     (IR & 0xFF800000) == 0xA8000000 ||
@@ -2910,8 +3003,13 @@ doovr2:
 /* |-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------| */
 /* */
                 case 0x6:           /* SVC  none - none */  /* Supervisor Call Trap */
+<<<<<<< HEAD
                 {
 #if 0  /* set to 1 for traceme to work */
+=======
+    {
+#if 0
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
         int j;
         char n[9];
         uint32 dqe = M[0x8e8>>2];
@@ -2949,7 +3047,11 @@ doovr2:
                     PSD1 = M[(t>>2)+2];             /* get new PSD 1 */
                     PSD2 = (M[(t>>2)+3] & ~0x3ffc) | bc;    /* get new PSD 2 w/old cpix */
                     M[(t>>2)+4] = IR&0xFFF;         /* store call number */
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
+=======
+#if 0
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 fprintf(stderr, "SVC @ %.8x SVC %x,%x PSD1 %.8x PSD2 %.8x SPAD PSD@ %x C.CURR %x LMN %s\r\n", OPSD1, temp2>>2, IR&0xFFF, PSD1, PSD2, SPAD[0xf5], dqe, n);
 fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
 fprintf(stderr, " R4=%x R5=%x R6=%x R7=%x", GPR[4], GPR[5], GPR[6], GPR[7]);
@@ -2982,7 +3084,11 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                     PSD2 &= ~RETMBIT;               /* turn off retain bit in PSD2 */
                     SPAD[0xf5] = PSD2;              /* save the current PSD2 */
                     goto newpsd;                    /* new psd loaded */
+<<<<<<< HEAD
                 }
+=======
+    }
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                     break;
 
                 case 0x7:           /* EXR */
@@ -3127,7 +3233,10 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                     TRAPME = ADDRSPEC_TRAP;     /* bad address, error */
                     goto newpsd;                /* go execute the trap now */
                 }
+<<<<<<< HEAD
                 temp2 = CC;                     /* save the old CC's */
+=======
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                 CC = PSD1 & 0x78000000;         /* get CC's if any */
                 switch(reg) {
                 case 0:     t = 1; break;
@@ -3143,8 +3252,12 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                 if (t) {                /* see if we are going to branch */
                     /* we are taking the branch, set CC's if indirect, else leave'm */
                     if (IR & IND)       /* see if CCs from last indirect location are wanted */
+<<<<<<< HEAD
 //                        PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
                         PSD1 = (PSD1 & 0x87fffffe) | temp2;    /* insert last CCs */
+=======
+                        PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                     /* update the PSD with new address */
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
                     i_flags |= BT;      /* we branched, so no PC update */
@@ -3161,7 +3274,10 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                     TRAPME = ADDRSPEC_TRAP;     /* bad address, error */
                     goto newpsd;                /* go execute the trap now */
                 }
+<<<<<<< HEAD
                 temp2 = CC;                     /* save the old CC's */
+=======
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                 CC = PSD1 & 0x78000000;         /* get CC's if any */
                 switch(reg) {
                 case 0:     t = (GPR[4] & (0x8000 >> ((CC >> 27) & 0xf))) != 0; break;
@@ -3180,8 +3296,12 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
                     i_flags |= BT;          /* we branched, so no PC update */
                     if (IR & IND)           /* see if CCs from last indirect location are wanted */
+<<<<<<< HEAD
 //                        PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
                         PSD1 = (PSD1 & 0x87fffffe) | temp2;    /* insert last CCs */
+=======
+                        PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 //fprintf(stderr, "BR t %.8x addr %.8x PSD1 %.8x\r\n", t, addr, PSD1);
                 }
                 break;
@@ -3191,7 +3311,11 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                 if (dest != 0) {                /* if reg is not 0, take the branch */
                     /* we are taking the branch, set CC's if indirect, else leave'm */
                     /* update the PSD with new address */
+<<<<<<< HEAD
 #if 1  /* set to 1 to stop branch to self, for now */
+=======
+#if 1
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 /* FIXME */         if (PC == (addr & 0x7FFFC)) {       /* BIB to current PC, bump branch addr */
                         addr += 4;
 //                      fprintf(stderr, "BI? stopping BIB $ addr %x PC %x\r\n", addr, PC);
@@ -3213,8 +3337,13 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                 case 0x1:       /* BL F880 */
                     /* copy CC's from instruction and PC incremented by 4 */
                     GPR[0] = ((PSD1 & 0x78000000) | (PSD1 & 0x7fffe)) + 4;
+<<<<<<< HEAD
                     if (IR & IND)           /* see if CC from last indirect loacation are wanted */
                         GPR[0] = (GPR[0] & 0x87fffffe) | CC;    /* insert last CCs */
+=======
+                    if (IR & IND)       /* see if CC from last indirect loacation are wanted */
+                        GPR[0] = (CC | (PSD1 & 0x7fffe)) + 4;   /* set CC's and incremented PC */
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                     /* update the PSD with new address */
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe);
                     i_flags |= BT;          /* we branched, so no PC update */
@@ -3223,12 +3352,20 @@ fprintf(stderr, "SVC %x,%x GPR[6] %x GPR[6] %x\r\n", temp2>>2, IR&0xfff, GPR[6],
                 case 0x3:       /* LPSD F980 */
                     /* fall through */;
                 case 0x5:       /* LPSDCM FA80 */
+<<<<<<< HEAD
                 {
 #if 0  /* set to 1 for traceme to work */
 int j;
 char n[9];
 uint32 dqe = M[0x8e8>>2];
 /* get task name blank filled */
+=======
+    {
+#if 0
+int j;
+char n[9];
+uint32 dqe = M[0x8e8>>2];
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 for (j=0; j<8; j++) {
     n[j] = (M[((dqe+0x18)>>2)+(j/4)] >> ((3-(j&7))*8)) & 0xff;
     if (n[j] == 0)
@@ -3267,6 +3404,7 @@ n[8] = 0;
                     if (CPUSTATUS & 0x80)           /* see if old mode is blocked */
                         PSD2 |= 0x00004000;         /* set to blocked state */
 
+<<<<<<< HEAD
                     if (opr & 0x0200) {             /* Was it LPSDCM? */
                         /* map bit must be on to load maps */
                         if (PSD2 & MAPBIT) {
@@ -3275,6 +3413,18 @@ n[8] = 0;
 //  if (n[0] == 'E' && n[1] == 'D' && n[2] == 'I' && n[3] == 'T')
     // FIXME DEBUG SYSGEN
 //if (n[0] == 'S' && n[1] == 'Y' && n[2] == 'S' && n[3] == 'G')
+=======
+                    /* TRY if cpix is zero, copy cpix from PSD2 in SPAD[0xf5] */
+                    if ((PSD2 & 0x3fff) == 0)
+                        PSD2 |= (SPAD[0xf5] & 0x3fff);  /* use new cpix */
+
+                    if (opr & 0x0200) {             /* Was it LPSDCM? */
+                        /* map bit must be on to load maps */
+                        if (PSD2 & MAPBIT) {
+#if 0
+    // FIXME DEBUG EDIT
+//  if (n[0] == 'E' && n[1] == 'D' && n[2] == 'I' && n[3] == 'T')
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 //      traceme = trstart;          /* start tracing */
 traceme++; /* start trace */
 //if (traceme >= trstart) {
@@ -3298,6 +3448,7 @@ fprintf(stderr, "\r\n");
                         PSD2 &= ~RETMBIT;               /* turn off retain bit in PSD2 */
                     } else {
                         /* LPSD */
+<<<<<<< HEAD
                         /* if cpix is zero, copy cpix from PSD2 in SPAD[0xf5] */
                         if ((PSD2 & 0x3fff) == 0) {
 //          fprintf(stderr, "LPSD using SPAD PSD2 %x instead of user PSD2 %x\r\n", SPAD[0xf5], PSD2); 
@@ -3306,15 +3457,26 @@ fprintf(stderr, "\r\n");
 #if 0  /* set to 1 for traceme to work */
 sim_debug(DEBUG_EXP, &cpu_dev, "LPSD PSD1 %x PSD2 %x CPUSTATUS %x\n", PSD1, PSD2, CPUSTATUS);
 if (traceme >= trstart) {
+=======
+//traceme++; /* start trace */
+#if 0
+sim_debug(DEBUG_EXP, &cpu_dev, "LPSD PSD1 %x PSD2 %x CPUSTATUS %x\n", PSD1, PSD2, CPUSTATUS);
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 fprintf(stderr, "LPSD PSD1 %x PSD2 %x SPAD PSD2 %x CPUSTATUS %x C.CURR %x LMN %s\r\n",
                 PSD1, PSD2, SPAD[0xf5], CPUSTATUS, dqe, n);
 fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
 fprintf(stderr, " R4=%x R5=%x R6=%x R7=%x", GPR[4], GPR[5], GPR[6], GPR[7]);
 fprintf(stderr, "\r\n");
+<<<<<<< HEAD
 }
 #endif
                     }
                 }
+=======
+#endif
+                    }
+}
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
                     /* TRAPME can be error from LPSDCM or OK here */
                     skipinstr = 1;                  /* skip next interrupt test only once */
                     goto newpsd;                    /* load the new psd */
@@ -3807,8 +3969,16 @@ sim_debug(DEBUG_EXP, &cpu_dev, "XIO DACI chan %x sa %x spad %.8x\n", chan, suba,
             TRAPME = AEXPCEPT_TRAP;     /* trap the system now */
             goto newpsd;                /* process the trap */
         }
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
         /* no trap, so continue with next instruction */
+=======
+#if 0
+        /* no trap, so continue with next instruction */
+//PC = PSD1 & 0xfffffe;         /* get 24 bit addr from PSD1 */
+// Get CCs from PSD1 and PC from original instruction */
+//if (traceme >= 4) {
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 if (traceme >= trstart) {
 OPSD1 &= 0x87FFFFFE;            /* clear the old CC's */
 OPSD1 |= PSD1 & 0x78000000;     /* update the CC's in the PSD */
@@ -3907,9 +4077,14 @@ fprintf(stderr, "[][][][][][][][][][][] HALT TRAP [][][][][][][][][][][][]\r\n")
 
                     PSD2 &= ~RETMBIT;               /* turn off retain bit in PSD2 */
                     SPAD[0xf5] = PSD2;              /* save the current PSD2 */
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
 //if (TRAPME == UNDEFINSTR_TRAP || TRAPME == MAPFAULT_TRAP) {
 if (TRAPME == MAPFAULT_TRAP) {
+=======
+#if 0
+if (TRAPME == UNDEFINSTR_TRAP) {
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 sim_debug(DEBUG_EXP, &cpu_dev, "TRAP PSD1 %x PSD2 %x CPUSTATUS %x\n", PSD1, PSD2, CPUSTATUS);
 fprintf(stderr, "TRAPS %x LOAD MAPS PSD1 %x PSD2 %x CPUSTATUS %x\r\n", TRAPME, PSD1, PSD2, CPUSTATUS);
 goto dumpi;
@@ -3924,7 +4099,11 @@ goto dumpi;
         /* we have a new PSD loaded via a LPSD or LPSDCM */
         /* TODO finish instruction history, then continue */
         /* update cpu status word too */
+<<<<<<< HEAD
 #if 0  /* set to 1 for traceme to work */
+=======
+#if 0
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 if (traceme >= trstart) {
 dumpi:
 OPSD1 &= 0x87FFFFFE;                    /* clear the old CC's */
@@ -3937,6 +4116,7 @@ fprint_inst(stderr, OIR, 0);    /* display instruction */
 fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
 fprintf(stderr, " R4=%x R5=%x R6=%x R7=%x", GPR[4], GPR[5], GPR[6], GPR[7]);
 fprintf(stderr, "\r\n");
+<<<<<<< HEAD
 fprintf(stderr, "Current MAPC\r\n");
 for (ix=0; ix<16; ix++) {
         fprintf(stderr, "MAP %x MPC %x\r\n", ix/2, MAPC[ix]);
@@ -3945,6 +4125,8 @@ fflush(stderr);
 //if (TRAPME == UNDEFINSTR_TRAP || TRAPME == MAPFAULT_TRAP)
 if (TRAPME == MAPFAULT_TRAP)
 return STOP_HALT;               /* exit to simh for halt */
+=======
+>>>>>>> 8497afa5304d5db4322e226f78b64d1181d7d460
 }
 #endif
 sim_debug(DEBUG_DATA, &cpu_dev, "R0=%08x R1=%08x R2=%08x R3=%08x\n", GPR[0], GPR[1], GPR[2], GPR[3]);
