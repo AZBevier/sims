@@ -31,11 +31,11 @@ sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
                console wakeup chars are @@A.  Install using TSM from console
                after exiting opcom.  Use filemgr to restore files from tape.
 
-               TSM> A3 IN=M91000,TAP\r\n
-               TSM> A4 SLO=UT\r\n
-               TSM> FILEMGR\r\n
-               FIL> RESTOREa\r\n
-               FIL> X\r\n
+               TSM> A3 IN=M91000,TAP
+               TSM> A4 SLO=UT
+               TSM> FILEMGR
+               FIL> RESTORE
+               FIL> X
 
 James C. Bevier
  
