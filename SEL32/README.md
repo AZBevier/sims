@@ -17,7 +17,7 @@ also be uncompressed and started with the sel32.ini.27.sim32.tape initialization
 file to install from tape.
 
 Available tap tools:
-taptools.tgx - set of tools to work with .tap formatted tapes.  Also tools
+taptools.tgz - set of tools to work with .tap formatted tapes.  Also tools
                to convert between MPX and UNIX file formats.  See README
                file and source for descriptions.
 
@@ -30,11 +30,11 @@ sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
                tapes and console terminal.  Terminal wakeup chan is ^G and
                console wakeup chars are @@A.  Install using TSM from console
                after exiting opcom.  Use filemgr to restore files from tape.
-               TSM> A3 IN=M91000,TAP
-               TSM> A4 SLO=UT
-               TSM> FILEMGR
-               FIL> RESTORE
-               FIL> X
+               TSM> A3 IN=M91000,TAP\r
+               TSM> A4 SLO=UT\r
+               TSM> FILEMGR\r
+               FIL> RESTOREa\r
+               FIL> X\r
 
 James C. Bevier
  
