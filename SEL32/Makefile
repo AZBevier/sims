@@ -1100,7 +1100,7 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c \
 	${SEL32D}/sel32_scfi.c \
 	${SEL32D}/sel32_fltpt.c \
 	${SEL32D}/sel32_disk.c
-SEL32_OPT = -I $(SEL32D) -DSEL32 -DUSE_SIM_CARD -m32 #-Wall
+SEL32_OPT = -I $(SEL32D) -DSEL32 -DUSE_SIM_CARD #-m32 -Wall
 #SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 -DUSE_SIM_CARD #-m32
 
 ###
