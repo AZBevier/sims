@@ -12,8 +12,8 @@ booted, initialized, and run many of the MPX utilities; including OPCOM & TSM.
 Eight terminals can be used to access TSM via Telnet port 4747.  Initial
 support has been added for excess 64 floating point arithmetic.  More testing
 is still required.  The sim32disk.gz can be uncompressed and booted with the
-sel32.ini.27.sim32.disk initialization file.  The sim32sdt.tap.gz file can
-also be uncompressed and started with the sel32.ini.27.sim32.tape initialization
+sel32.27.sim32.disk.ini initialization file.  The sim32sdt.tap.gz file can
+also be uncompressed and started with the sel32.27.sim32.tape.ini initialization
 file to install from tape.
 
 Available tap tools:
