@@ -155,12 +155,9 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case IOP_INCH:                                  /* INCH command */
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
-//fprintf(stderr, "iop_startcmd %x: Cmd INCH\n", chan);
         sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd INCH\n", chan);
         uptr->u3 |= IOP_MSK;                        /* save INCH command as 0xff */
-//fprintf(stderr, "iop_startcmd %x: Cmd INCH\n", chan);
         sim_activate(uptr, 20);                     /* TRY 07-13-19 */
-//UTX        return SNS_CHNEND|SNS_DEVEND;          /* all is well */
         return 0;                                   /* no status change */
         break;
 
@@ -169,22 +166,17 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & IOP_MSK);                /* save NOP command */
-//fprintf(stderr, "iop_startcmd %x: Cmd NOP\n", chan);
         sim_activate(uptr, 20);                     /* TRY 07-13-19 */
-//UTX        return SNS_CHNEND|SNS_DEVEND;          /* all is well */
         return 0;                                   /* no status change */
         break;
 
     default:                                        /* invalid command */
         uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
-//fprintf(stderr, "iop_startcmd %x: Cmd Invald %x status %02x\n", chan, cmd, uptr->u5);
         sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd Invald %x status %02x\n", chan, cmd, uptr->u5);
-//        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & IOP_MSK);                /* save command */
         sim_activate(uptr, 20);                     /* force interrupt */
         return 0;                                   /* no status change */
-//        return SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP;
         break;
     }
 
@@ -201,7 +193,6 @@ t_stat iop_srv(UNIT *uptr)
 
     /* test for NOP or INCH cmds */
     if ((cmd == IOP_NOP) || (cmd == IOP_MSK)) {     /* NOP has do nothing */
-//fprintf(stderr, "iop_srv INCH or NOP %x chan %x: Cmd INCH\n", chsa);
         uptr->u3 &= LMASK;                              /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_srv INCH/NOP chan %d: chnend|devend\n", chsa);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);          /* done */
