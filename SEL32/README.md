@@ -40,7 +40,7 @@ sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
                FIL> RESTORE
                FIL> X
 
-Available Level One DIagnostic boot tape:
+Available Level One Diagnostic boot tape:
 diag.ini       command file to start diags. ./sel32 diag.ini
 diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
                to 32/27, 32/67, 32/97, or V9.  V6 will not work at this time.
@@ -51,11 +51,17 @@ diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
                without any source for the diagnostics.  Updates to follow as
                tests are corrected.
 
+Available UTX-21a install tape for testing:
+utxtape1.ini   command file to start UTX install tape.  ./sel32 utxtape1.ini
+utx21a1.tap    bootable UTX install tape for testing basemode.  The current
+               simulator will only boot part of the system before receiving
+               an error.  Not all basemode instructions have been tested yet.
+
 Other MPX verion support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
                much of the source, but no loadable code to creat a bootable system.
                Please keep looking for anyone who can provide these tapes.
 
 James C. Bevier
-07/06/2019
+07/18/2019
  
