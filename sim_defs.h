@@ -125,6 +125,14 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 #include <limits.h>
 #include <ctype.h>
 
+#ifndef EXIT_FAILURE
+#define EXIT_FAILURE 1
+#endif
+#ifndef EXIT_SUCCESS
+#define EXIT_SUCCESS 0
+#endif
+
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <windows.h>
@@ -403,13 +411,14 @@ typedef uint32          t_addr;
 #define SCPE_STALL      (SCPE_BASE + 41)                /* Telnet conn stall */
 #define SCPE_AFAIL      (SCPE_BASE + 42)                /* assert failed */
 #define SCPE_INVREM     (SCPE_BASE + 43)                /* invalid remote console command */
-#define SCPE_NOTATT     (SCPE_BASE + 44)                /* not attached */
-#define SCPE_EXPECT     (SCPE_BASE + 45)                /* expect matched */
-#define SCPE_AMBREG     (SCPE_BASE + 46)                /* ambiguous register */
-#define SCPE_REMOTE     (SCPE_BASE + 47)                /* remote console command */
-#define SCPE_INVEXPR    (SCPE_BASE + 48)                /* invalid expression */
+#define SCPE_EXPECT     (SCPE_BASE + 44)                /* expect matched */
+#define SCPE_AMBREG     (SCPE_BASE + 45)                /* ambiguous register */
+#define SCPE_REMOTE     (SCPE_BASE + 46)                /* remote console command */
+#define SCPE_INVEXPR    (SCPE_BASE + 47)                /* invalid expression */
+#define SCPE_SIGTERM    (SCPE_BASE + 48)                /* SIGTERM has been received */
+#define SCPE_FSSIZE     (SCPE_BASE + 49)                /* File System size larger than disk size */
 
-#define SCPE_MAX_ERR    (SCPE_BASE + 48)                /* Maximum SCPE Error Value */
+#define SCPE_MAX_ERR    (SCPE_BASE + 49)                /* Maximum SCPE Error Value */
 #define SCPE_KFLAG      0x10000000                      /* tti data flag */
 #define SCPE_BREAK      0x20000000                      /* tti break flag */
 #define SCPE_NOMESSAGE  0x40000000                      /* message display supression flag */
@@ -584,6 +593,8 @@ struct UNIT {
     uint16              us9;                            /* device specific */
     uint16              us10;                           /* device specific */
     void                *tmxr;                          /* TMXR linkage */
+    uint32              recsize;                        /* Tape specific info */
+    t_addr              tape_eom;                       /* Tape specific info */
     t_bool              (*cancel)(UNIT *);
     double              usecs_remaining;                /* time balance for long delays */
     char                *uname;                         /* Unit name */
@@ -638,13 +649,21 @@ struct UNIT {
 
 /* These flags are only set dynamically */
 
-#define UNIT_ATTMULT    0000001         /* Allow multiple attach commands */
-#define UNIT_TM_POLL    0000002         /* TMXR Polling unit */
-#define UNIT_NO_FIO     0000004         /* fileref is NOT a FILE * */
-#define UNIT_DISK_CHK   0000010         /* disk data debug checking (sim_disk) */
-#define UNIT_TMR_UNIT   0000020         /* Unit registered as a calibrated timer */
-#define UNIT_V_DF_TAPE  6               /* Bit offset for Tape Density reservation */
-#define UNIT_S_DF_TAPE  3               /* Bits Reserved for Tape Density */
+#define UNIT_ATTMULT        0000001         /* Allow multiple attach commands */
+#define UNIT_TM_POLL        0000002         /* TMXR Polling unit */
+#define UNIT_NO_FIO         0000004         /* fileref is NOT a FILE * */
+#define UNIT_DISK_CHK       0000010         /* disk data debug checking (sim_disk) */
+#define UNIT_TMR_UNIT       0000200         /* Unit registered as a calibrated timer */
+#define UNIT_TAPE_MRK       0000400         /* Tape Unit Tapemark */
+#define UNIT_TAPE_PNU       0001000         /* Tape Unit Position Not Updated */
+#define UNIT_V_DF_TAPE      10              /* Bit offset for Tape Density reservation */
+#define UNIT_S_DF_TAPE      3               /* Bits Reserved for Tape Density */
+#define UNIT_V_TAPE_FMT     13              /* Bit offset for Tape Format */
+#define UNIT_S_TAPE_FMT     3               /* Bits Reserved for Tape Format */
+#define UNIT_M_TAPE_FMT     (((1 << UNIT_S_TAPE_FMT) - 1) << UNIT_V_TAPE_FMT)
+#define UNIT_V_TAPE_ANSI    16              /* Bit offset for ANSI Tape Type */
+#define UNIT_S_TAPE_ANSI    4               /* Bits Reserved for ANSI Tape Type */
+#define UNIT_M_TAPE_ANSI    (((1 << UNIT_S_TAPE_ANSI) - 1) << UNIT_V_TAPE_ANSI)
 
 struct BITFIELD {
     const char      *name;                              /* field name */
@@ -847,14 +866,6 @@ struct DEBTAB {
 #define DEBUG_PRI(d,m)  (sim_deb && (d.dctrl & (m)))
 #define DEBUG_PRJ(d,m)  (sim_deb && ((d)->dctrl & (m)))
 
-#define SIM_DBG_EVENT       0x010000        /* event dispatch activities */
-#define SIM_DBG_ACTIVATE    0x020000        /* queue insertion activities */
-#define SIM_DBG_AIO_QUEUE   0x040000        /* asynch event queue activities */
-#define SIM_DBG_EXP_STACK   0x080000        /* expression stack activities */
-#define SIM_DBG_EXP_EVAL    0x100000        /* expression evaluation activities */
-#define SIM_DBG_BRK_ACTION  0x200000        /* action activities */
-#define SIM_DBG_DO          0x400000        /* do activities */
-
 /* Open File Reference */
 struct FILEREF {
     char                name[CBUFSIZE];                 /* file name */
@@ -952,12 +963,12 @@ struct MEMFILE {
     _REGDATANF(#nm,&(loc),rdx,wd,off,dep,desc,NULL,0,siz),((fl) | REG_STRUCT)
 #define STRDATADF(nm,loc,rdx,wd,off,dep,siz,fl,desc,flds) \
     _REGDATANF(#nm,&(loc),rdx,wd,off,dep,desc,flds,0,siz),((fl) | REG_STRUCT)
-#define BIT(nm)              {#nm, 0xffffffff, 1}             /* Single Bit definition */
-#define BITNC                {"",  0xffffffff, 1}             /* Don't care Bit definition */
-#define BITF(nm,sz)          {#nm, 0xffffffff, sz}            /* Bit Field definition */
-#define BITNCF(sz)           {"",  0xffffffff, sz}            /* Don't care Bit Field definition */
-#define BITFFMT(nm,sz,fmt)   {#nm, 0xffffffff, sz, NULL, #fmt}/* Bit Field definition with Output format */
-#define BITFNAM(nm,sz,names) {#nm, 0xffffffff, sz, names}     /* Bit Field definition with value->name map */
+#define BIT(nm)              {#nm, 0xffffffff, 1,  NULL, NULL}  /* Single Bit definition */
+#define BITNC                {"",  0xffffffff, 1,  NULL, NULL}  /* Don't care Bit definition */
+#define BITF(nm,sz)          {#nm, 0xffffffff, sz, NULL, NULL}  /* Bit Field definition */
+#define BITNCF(sz)           {"",  0xffffffff, sz, NULL, NULL}  /* Don't care Bit Field definition */
+#define BITFFMT(nm,sz,fmt)   {#nm, 0xffffffff, sz, NULL, #fmt}  /* Bit Field definition with Output format */
+#define BITFNAM(nm,sz,names) {#nm, 0xffffffff, sz, names,NULL}  /* Bit Field definition with value->name map */
 #else /* For non-STD-C compiler which can't stringify macro arguments with # */
 /* Generic Register declaration for all fields.  
    If the register structure is extended, this macro will be retained and a 
@@ -1029,12 +1040,12 @@ struct MEMFILE {
     _REGDATANF("nm",&(loc),rdx,wd,off,dep,desc,NULL,0,siz),((fl) | REG_STRUCT)
 #define STRDATADF(nm,loc,rdx,wd,off,dep,siz,fl,desc,flds) \
     _REGDATANF("nm",&(loc),rdx,wd,off,dep,desc,flds,0,siz),((fl) | REG_STRUCT)
-#define BIT(nm)              {"nm", 0xffffffff, 1}              /* Single Bit definition */
-#define BITNC                {"",   0xffffffff, 1}              /* Don't care Bit definition */
-#define BITF(nm,sz)          {"nm", 0xffffffff, sz}             /* Bit Field definition */
-#define BITNCF(sz)           {"",   0xffffffff, sz}             /* Don't care Bit Field definition */
+#define BIT(nm)              {"nm", 0xffffffff, 1,  NULL, NULL} /* Single Bit definition */
+#define BITNC                {"",   0xffffffff, 1,  NULL, NULL} /* Don't care Bit definition */
+#define BITF(nm,sz)          {"nm", 0xffffffff, sz, NULL, NULL} /* Bit Field definition */
+#define BITNCF(sz)           {"",   0xffffffff, sz, NULL, NULL} /* Don't care Bit Field definition */
 #define BITFFMT(nm,sz,fmt)   {"nm", 0xffffffff, sz, NULL, "fmt"}/* Bit Field definition with Output format */
-#define BITFNAM(nm,sz,names) {"nm", 0xffffffff, sz, names}      /* Bit Field definition with value->name map */
+#define BITFNAM(nm,sz,names) {"nm", 0xffffffff, sz, names,NULL} /* Bit Field definition with value->name map */
 #endif
 #define ENDBITS {NULL}  /* end of bitfield list */
 
@@ -1099,7 +1110,8 @@ extern int32 sim_asynch_inst_latency;
                     sim_debug (SIM_DBG_EVENT, sim_dflt_dev, "Queue Corruption detected\n");\
                     fclose(sim_deb);                            \
                     }                                           \
-                sim_printf("Queue Corruption detected\n");      \
+                sim_printf("Queue Corruption detected in %s line %d\n",\
+                           __FILE__, __LINE);                   \
                 abort();                                        \
                 }                                               \
         if (lock)                                               \
@@ -1162,14 +1174,11 @@ extern int32 sim_asynch_inst_latency;
 #define AIO_QUEUE_MODE "Lock free asynchronous event queue"
 #define AIO_INIT                                                  \
     do {                                                          \
-      int tmr;                                                    \
       sim_asynch_main_threadid = pthread_self();                  \
       /* Empty list/list end uses the point value (void *)1.      \
          This allows NULL in an entry's a_next pointer to         \
          indicate that the entry is not currently in any list */  \
       sim_asynch_queue = QUEUE_LIST_END;                          \
-      for (tmr=0; tmr<SIM_NTIMERS; tmr++)                         \
-          sim_clock_cosched_queue[tmr] = QUEUE_LIST_END;          \
       } while (0)
 #define AIO_CLEANUP                                               \
     do {                                                          \
@@ -1205,7 +1214,6 @@ extern int32 sim_asynch_inst_latency;
 #define AIO_QUEUE_MODE "Lock based asynchronous event queue"
 #define AIO_INIT                                                  \
     do {                                                          \
-      int tmr;                                                    \
       pthread_mutexattr_t attr;                                   \
                                                                   \
       pthread_mutexattr_init (&attr);                             \
@@ -1217,8 +1225,6 @@ extern int32 sim_asynch_inst_latency;
          This allows NULL in an entry's a_next pointer to         \
          indicate that the entry is not currently in any list */  \
       sim_asynch_queue = QUEUE_LIST_END;                          \
-      for (tmr=0; tmr<SIM_NTIMERS; tmr++)                         \
-          sim_clock_cosched_queue[tmr] = QUEUE_LIST_END;          \
       } while (0)
 #define AIO_CLEANUP                                               \
     do {                                                          \
@@ -1255,7 +1261,12 @@ extern int32 sim_asynch_inst_latency;
       return SCPE_OK;                                                  \
     } else (void)0
 #endif /* USE_AIO_INTRINSICS */
-#define AIO_VALIDATE if (!pthread_equal ( pthread_self(), sim_asynch_main_threadid )) {sim_printf("Improper thread context for operation\n"); abort();}
+#define AIO_VALIDATE(uptr)                                             \
+    if (!pthread_equal ( pthread_self(), sim_asynch_main_threadid )) { \
+      sim_printf("Improper thread context for operation on %s in %s line %d\n", \
+                   sim_uname(uptr), __FILE__, __LINE__);               \
+      abort();                                                         \
+      } else (void)0
 #define AIO_CHECK_EVENT                                                \
     if (0 > --sim_asynch_check) {                                      \
       AIO_UPDATE_QUEUE;                                                \
@@ -1271,7 +1282,7 @@ extern int32 sim_asynch_inst_latency;
 #define AIO_QUEUE_MODE "Asynchronous I/O is not available"
 #define AIO_UPDATE_QUEUE
 #define AIO_ACTIVATE(caller, uptr, event_time)
-#define AIO_VALIDATE
+#define AIO_VALIDATE(uptr)
 #define AIO_CHECK_EVENT
 #define AIO_INIT
 #define AIO_MAIN_THREAD TRUE

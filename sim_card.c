@@ -140,8 +140,8 @@ static const uint16          ascii_to_hol_026[128] = {
    /*   p      q      r      s      t      u      v      w */
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
-   /*                     Y78     X78    78     79         */
-    0x604, 0x602, 0x601, 0x406, 0x806,0x0006,0x0005,0xf000
+   /*                     T79     Y78   Y79     79         */
+    0x604, 0x602, 0x601, 0x406, 0x806, 0x006, 0x005, 0xf000
 };
 
 /* Set for Burrough codes */
@@ -155,17 +155,17 @@ static const uint16          ascii_to_hol_029[128] = {
    /*Control*/
     0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
    /*  sp      !      "      #      $      %      &      ' */
-   /* none   T28   T78      38    Y38    T48    X      58  */
-    0x000, 0x282, 0x206, 0x042, 0x442, 0x222, 0x800, 0x012,     /* 40 - 77 */
+   /* none   X28    78      38    Y38    T48    X      58  */
+    0x000, 0x482, 0x006, 0x042, 0x442, 0x222, 0x800, 0x012,     /* 40 - 77 */
    /*   (      )      *      +      ,      -      .      / */
-   /* X58    Y58    Y48    XT     T38    Y      X38    T1  */
-    0x812, 0x412, 0x422, 0xA00, 0x242, 0x400, 0x842, 0x300,
+   /* X58    Y58    Y48    X68    T38    Y      X38    T1  */
+    0x812, 0x412, 0x422, 0x80A, 0x242, 0x400, 0x842, 0x300,
    /*   0      1      2      3      4      5      6      7 */
    /* T      1      2      3      4      5      6      7   */
     0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,
    /*   8      9      :      ;      <      =      >      ? */
-   /* 8      9      58     Y68    X68    T85    T68     28 */
-    0x002, 0x001, 0x012, 0x40A, 0x80A, 0x212, 0x00A, 0x082,
+   /* 8      9      28     Y68    X48     68    T68     28 */
+    0x002, 0x001, 0x082, 0x40A, 0x822, 0x00A, 0x20A, 0x206,
    /*   @      A      B      C      D      E      F      G */
    /*  48    X1     X2     X3     X4     X5     X6     X7  */
     0x022, 0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,     /* 100 - 137 */
@@ -176,8 +176,8 @@ static const uint16          ascii_to_hol_029[128] = {
    /* Y7     Y8     Y9     T2     T3     T4     T5     T6  */
     0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,
    /*   X      Y      Z      [      \      ]      ^      _ */
-   /* T7     T8     T9     X48    X68    T68    T78     68 */
-    0x204, 0x202, 0x201, 0x822, 0x20A, 0x20A, 0x406, 0x00A,
+   /* T7     T8     T9     X0     T28    Y28    T78    T58 */
+    0x204, 0x202, 0x201, 0xA00, 0x282, 0x882, 0x406, 0x212,
    /*   `      a      b      c      d      e      f      g */
     0xf000,0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
    /*   h      i      j      k      l      m      n      o */
@@ -186,7 +186,7 @@ static const uint16          ascii_to_hol_029[128] = {
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
    /*                     Y78     YT     78    X78         */
-    0x604, 0x602, 0x601, 0x406, 0x600, 0x006, 0x806,0xf000
+    0x604, 0x602, 0x601, 0x405, 0x600, 0x805, 0x806,0xf000
 };
 
 static const uint16          ascii_to_hol_ebcdic[128] = {
@@ -296,11 +296,11 @@ static uint16 ebcdic_to_hol[256] = {
  /* E        01    E092   E093   E094   E095   E096    E097  0x6x */
    0x400,  0x300, 0x681, 0x641, 0x621, 0x611, 0x609, 0x605,
  /* E098     018   TE     038    048     68    068     078    */
-   0x603,  0x302, 0xC00, 0x242, 0x222, 0x00A, 0x20A, 0x206,
+   0x603,  0x302, 0xC00, 0x242, 0x222, 0x212, 0x20A, 0x206,
  /* TE0    TE091  TE092  TE093  TE094  TE095  TE096  TE097   0x7x */
    0xE00,  0xF01, 0xE81, 0xE41, 0xE21, 0xE11, 0xE09, 0xE05,
- /* TE098    18     28     38    48      58     T58     78    */
-   0xE03,  0x102, 0x082, 0x042, 0x022, 0x012, 0x212, 0x006,
+ /* TE098    18     28     38    48      58      68     78    */
+   0xE03,  0x102, 0x082, 0x042, 0x022, 0x012, 0x00A, 0x006,
  /* T018     T01    T02    T03    T04    T05    T06    T07   0x8x */
    0xB02,  0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,
  /* T08      T09   T028   T038    T048   T058   T068   T078   */
@@ -1380,9 +1380,89 @@ t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, cons
     return SCPE_OK;
 }
 
-#else
+static t_stat create_card_file (const char *filename, int cards)
+{
+FILE *f;
+int i;
+
+f = fopen (filename, "w");
+if (f == NULL)
+    return SCPE_OPENERR;
+for (i=0; i<cards; i++)
+    fprintf (f, "%05d ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\n", i);
+fclose (f);
+return SCPE_OK;
+}
+
+#include <setjmp.h>
+
+t_stat sim_card_test (DEVICE *dptr)
+{
+t_stat stat = SCPE_OK;
+#if defined(USE_SIM_CARD) && defined(SIM_CARD_API)
+char cmd[CBUFSIZE];
+char saved_filename[4*CBUFSIZE];
+uint16 card_image[80];
+SIM_TEST_INIT;
+
+if ((dptr->units->flags & UNIT_RO) == 0)  /* Punch device? */
+    return SCPE_OK;
+
+sim_printf ("Testing %s device sim_card APIs\n", dptr->name);
+
+(void)remove("file1.deck");
+(void)remove("file2.deck");
+(void)remove("file3.deck");
+(void)remove("file4.deck");
+
+SIM_TEST(create_card_file ("File10.deck", 10));
+SIM_TEST(create_card_file ("File20.deck", 20));
+SIM_TEST(create_card_file ("File30.deck", 30));
+SIM_TEST(create_card_file ("File40.deck", 40));
+
+sprintf (cmd, "%s File10.deck", dptr->name);
+SIM_TEST(attach_cmd (0, cmd));
+sprintf (cmd, "%s File20.deck", dptr->name);
+SIM_TEST(attach_cmd (0, cmd));
+sprintf (cmd, "%s -S File30.deck", dptr->name);
+SIM_TEST(attach_cmd (0, cmd));
+sprintf (cmd, "%s -S -E File40.deck", dptr->name);
+SIM_TEST(attach_cmd (0, cmd));
+sprintf (saved_filename, "%s %s", dptr->name, dptr->units->filename);
+show_cmd (0, dptr->name);
+sim_printf ("Input Hopper Count:  %d\n", sim_card_input_hopper_count(dptr->units));
+sim_printf ("Output Hopper Count: %d\n", sim_card_output_hopper_count(dptr->units));
+while (!sim_card_eof (dptr->units))
+    SIM_TEST(sim_read_card (dptr->units, card_image));
+sim_printf ("Input Hopper Count:  %d\n", sim_card_input_hopper_count(dptr->units));
+sim_printf ("Output Hopper Count: %d\n", sim_card_output_hopper_count(dptr->units));
+sim_printf ("Detaching %s\n", dptr->name);
+SIM_TEST(detach_cmd (0, dptr->name));
+show_cmd (0, dptr->name);
+sim_printf ("Input Hopper Count:  %d\n", sim_card_input_hopper_count(dptr->units));
+sim_printf ("Output Hopper Count: %d\n", sim_card_output_hopper_count(dptr->units));
+sim_printf ("Attaching Saved Filenames: %s\n", saved_filename + strlen(dptr->name));
+SIM_TEST(attach_cmd (0, saved_filename));
+show_cmd (0, dptr->name);
+sim_printf ("Input Hopper Count:  %d\n", sim_card_input_hopper_count(dptr->units));
+sim_printf ("Output Hopper Count: %d\n", sim_card_output_hopper_count(dptr->units));
+SIM_TEST(detach_cmd (0, dptr->name));
+(void)remove ("file10.deck");
+(void)remove ("file20.deck");
+(void)remove ("file30.deck");
+(void)remove ("file40.deck");
+#endif /* defined(USE_SIM_CARD) && defined(SIM_CARD_API) */
+return stat;
+}
+
+#else   /* !defined(USE_SIM_CARD) */
 
 t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+    return SCPE_OK;
+}
+
+t_stat sim_card_test (DEVICE *dptr)
 {
     return SCPE_OK;
 }

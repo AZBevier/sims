@@ -46,7 +46,7 @@ extern "C" {
 #endif
 
 #if defined (__APPLE__)
-#define HAVE_STRUCT_TIMESPEC 1   /* OSX defined the structure but doesn't tell us */
+#define HAVE_STRUCT_TIMESPEC     /* OSX defined the structure but doesn't tell us */
 #endif
 
 /* on HP-UX, CLOCK_REALTIME is enum, not preprocessor define */
@@ -55,12 +55,12 @@ extern "C" {
 #define NEED_CLOCK_GETTIME 1
 #if  defined(_MSC_VER)      /* Visual Studio/Visual C++ */
 #if _MSC_VER >= 1900        /* Visual Studio Community (2015) */
-#define HAVE_STRUCT_TIMESPEC 1
-#define _TIMESPEC_DEFINED 1
+#define HAVE_STRUCT_TIMESPEC
+#define _TIMESPEC_DEFINED
 #endif /* _MSC_VER >= 1900 */
 #endif /* defined(_MSC_VER) */
 #if !defined(HAVE_STRUCT_TIMESPEC)
-#define HAVE_STRUCT_TIMESPEC 1
+#define HAVE_STRUCT_TIMESPEC
 #if !defined(_TIMESPEC_DEFINED)
 #define _TIMESPEC_DEFINED
 struct timespec {
@@ -76,7 +76,7 @@ int clock_gettime(int clock_id, struct timespec *tp);
 #define SIM_NTIMERS     8                           /* # timers */
 #define SIM_TMAX        500                         /* max timer makeup */
 
-#define SIM_INITIAL_IPS 500000                      /* uncalibrated assumption */
+#define SIM_INITIAL_IPS 5000000                     /* uncalibrated assumption */
                                                     /* about instructions per second */
 
 #define SIM_IDLE_CAL    10                          /* ms to calibrate */
@@ -108,12 +108,14 @@ void sim_timespec_diff (struct timespec *diff, struct timespec *min, struct time
 double sim_timenow_double (void);
 int32 sim_rtcn_init (int32 time, int32 tmr);
 int32 sim_rtcn_init_unit (UNIT *uptr, int32 time, int32 tmr);
+int32 sim_rtcn_init_unit_ticks (UNIT *uptr, int32 time, int32 tmr, int32 ticksper);
 void sim_rtcn_get_time (struct timespec *now, int tmr);
 t_stat sim_rtcn_tick_ack (uint32 time, int32 tmr);
 void sim_rtcn_init_all (void);
-int32 sim_rtcn_calb (int32 ticksper, int32 tmr);
+int32 sim_rtcn_calb (uint32 ticksper, int32 tmr);
+int32 sim_rtcn_calb_tick (int32 tmr);
 int32 sim_rtc_init (int32 time);
-int32 sim_rtc_calb (int32 ticksper);
+int32 sim_rtc_calb (uint32 ticksper);
 t_stat sim_set_timers (int32 arg, CONST char *cptr);
 t_stat sim_show_timers (FILE* st, DEVICE *dptr, UNIT* uptr, int32 val, CONST char* desc);
 t_stat sim_show_clock_queues (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
@@ -145,6 +147,7 @@ t_stat sim_clock_coschedule_abs (UNIT *uptr, int32 interval);
 t_stat sim_clock_coschedule_tmr (UNIT *uptr, int32 tmr, int32 ticks);
 t_stat sim_clock_coschedule_tmr_abs (UNIT *uptr, int32 tmr, int32 ticks);
 double sim_timer_inst_per_sec (void);
+void sim_timer_precalibrate_execution_rate (void);
 int32 sim_rtcn_tick_size (int32 tmr);
 int32 sim_rtcn_calibrated_tmr (void);
 t_bool sim_timer_idle_capable (uint32 *host_ms_sleep_1, uint32 *host_tick_ms);

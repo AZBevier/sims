@@ -183,6 +183,7 @@ t_stat vid_register_quit_callback (VID_QUIT_CALLBACK callback);
 t_stat vid_close (void);
 t_stat vid_poll_kb (SIM_KEY_EVENT *ev);
 t_stat vid_poll_mouse (SIM_MOUSE_EVENT *ev);
+uint32 vid_map_rgb (uint8 r, uint8 g, uint8 b);
 void vid_draw (int32 x, int32 y, int32 w, int32 h, uint32 *buf);
 void vid_beep (void);
 void vid_refresh (void);
@@ -196,13 +197,26 @@ t_stat vid_show (FILE* st, DEVICE *dptr,  UNIT* uptr, int32 val, CONST char* des
 t_stat vid_screenshot (const char *filename);
 
 extern t_bool vid_active;
-extern uint32 vid_mono_palette[2];
 void vid_set_cursor_position (int32 x, int32 y);        /* cursor position (set by calling code) */
 
-#define SIM_VID_DBG_MOUSE   0x01000000
-#define SIM_VID_DBG_CURSOR  0x02000000
-#define SIM_VID_DBG_KEY     0x04000000
-#define SIM_VID_DBG_VIDEO   0x08000000
+/* A device simulator can optionally set the vid_display_kb_event_process
+ * routine pointer to the address of a routine.
+ * Simulator code which uses the display library which processes window 
+ * keyboard data with code in display/sim_ws.c can use this routine to
+ * explicitly get access to keyboard events that arrive in the display 
+ * window.  This routine should return 0 if it has handled the event that
+ * was passed, and non zero if it didn't handle it.  If the routine address
+ * is not set or a non zero return value occurs, then the keyboard event
+ * will be processed by the display library which may then be handled as
+ * console character input if the device console code is implemented to 
+ * accept this.
+ */
+extern int (*vid_display_kb_event_process)(SIM_KEY_EVENT *kev);
+
+#define SIM_VID_DBG_MOUSE   0x10000000
+#define SIM_VID_DBG_CURSOR  0x20000000
+#define SIM_VID_DBG_KEY     0x40000000
+#define SIM_VID_DBG_VIDEO   0x80000000
 
 #ifdef  __cplusplus
 }

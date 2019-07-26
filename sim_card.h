@@ -68,7 +68,7 @@ extern "C" {
 
 #define SIM_CARD_API    2               /* API Version */
 
-#define DEBUG_CARD      0x0000010       /* Show details */
+#define DEBUG_CARD      0x80000000      /* Show details */
 
 /* Flags for punch and reader. */
 #define UNIT_V_CARD_MODE  (UNIT_V_UF + 0)
@@ -129,6 +129,9 @@ t_stat   sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, co
 extern CONST char      sim_six_to_ascii[64];        /* Map BCD to ASCII */
 extern CONST char      sim_ascii_to_six[128];       /* Map 7 bit ASCII to BCD */
 extern CONST uint8     sim_parity_table[64];        /* 64 entry odd parity table */
+
+/* Unit test routine */
+extern t_stat sim_card_test (DEVICE *dptr);
 
 #ifdef  __cplusplus
 }

@@ -49,8 +49,8 @@
 #endif
 
 #if !defined(SIM_GIT_COMMIT_ID)
-#define SIM_GIT_COMMIT_ID 65d8fa503419844c2a020e0e31fd0a17047ecd31
-#define SIM_GIT_COMMIT_TIME 2018-07-31T14:00:47-04:00
+#define SIM_GIT_COMMIT_ID $Format:%H$
+#define SIM_GIT_COMMIT_TIME $Format:%aI$
 #endif
 
 /*

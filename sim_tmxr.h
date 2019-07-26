@@ -66,17 +66,17 @@ typedef struct SERPORT *SERHANDLE;
 #define TMXR_MODEM_RING_TIME 3                          /* seconds to wait for DTR for incoming connections */
 #define TMXR_DEFAULT_CONNECT_POLL_INTERVAL 1            /* seconds between connection polls */
 
-#define TMXR_DBG_XMT    0x0010000                        /* Debug Transmit Data */
-#define TMXR_DBG_RCV    0x0020000                        /* Debug Received Data */
-#define TMXR_DBG_RET    0x0040000                        /* Debug Returned Received Data */
-#define TMXR_DBG_MDM    0x0080000                        /* Debug Modem Signals */
-#define TMXR_DBG_CON    0x0100000                        /* Debug Connection Activities */
-#define TMXR_DBG_ASY    0x0200000                        /* Debug Asynchronous Activities */
-#define TMXR_DBG_TRC    0x0400000                        /* Debug trace routine calls */
-#define TMXR_DBG_PXMT   0x0800000                        /* Debug Transmit Packet Data */
-#define TMXR_DBG_PRCV   0x1000000                        /* Debug Received Packet Data */
-#define TMXR_DBG_EXP    0x2000000                        /* Debug Expect Activities */
-#define TMXR_DBG_SEND   0x4000000                        /* Debug Send Activities */
+#define TMXR_DBG_XMT    0x00200000                       /* Debug Transmit Data */
+#define TMXR_DBG_RCV    0x00400000                       /* Debug Received Data */
+#define TMXR_DBG_RET    0x00800000                       /* Debug Returned Received Data */
+#define TMXR_DBG_MDM    0x01000000                       /* Debug Modem Signals */
+#define TMXR_DBG_CON    0x02000000                       /* Debug Connection Activities */
+#define TMXR_DBG_ASY    0x04000000                       /* Debug Asynchronous Activities */
+#define TMXR_DBG_TRC    0x08000000                       /* Debug trace routine calls */
+#define TMXR_DBG_PXMT   0x10000000                       /* Debug Transmit Packet Data */
+#define TMXR_DBG_PRCV   0x20000000                       /* Debug Received Packet Data */
+#define TMXR_DBG_EXP    0x40000000                       /* Debug Expect Activities */
+#define TMXR_DBG_SEND   0x80000000                       /* Debug Send Activities */
 
 /* Modem Control Bits */
 
@@ -114,9 +114,13 @@ typedef struct SERPORT *SERHANDLE;
 #define TMLN_SPD_7200_BPS     1388 /* usec per character */
 #define TMLN_SPD_9600_BPS     1041 /* usec per character */
 #define TMLN_SPD_19200_BPS     520 /* usec per character */
+#define TMLN_SPD_25000_BPS     400 /* usec per character */
 #define TMLN_SPD_38400_BPS     260 /* usec per character */
+#define TMLN_SPD_40000_BPS     250 /* usec per character */
+#define TMLN_SPD_50000_BPS     200 /* usec per character */
 #define TMLN_SPD_57600_BPS     173 /* usec per character */
 #define TMLN_SPD_76800_BPS     130 /* usec per character */
+#define TMLN_SPD_80000_BPS     125 /* usec per character */
 #define TMLN_SPD_115200_BPS     86 /* usec per character */
 
 
@@ -260,6 +264,7 @@ t_stat tmxr_set_line_halfduplex (TMLN *lp, t_bool enable_loopback);
 t_bool tmxr_get_line_halfduplex (TMLN *lp);
 t_stat tmxr_set_line_speed (TMLN *lp, CONST char *speed);
 t_stat tmxr_set_config_line (TMLN *lp, CONST char *config);
+t_stat tmxr_set_line_modem_control (TMLN *lp, t_bool enab_disab);
 t_stat tmxr_set_line_unit (TMXR *mp, int line, UNIT *uptr_poll);
 t_stat tmxr_set_line_output_unit (TMXR *mp, int line, UNIT *uptr_poll);
 t_stat tmxr_set_console_units (UNIT *rxuptr, UNIT *txuptr);

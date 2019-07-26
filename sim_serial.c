@@ -187,9 +187,9 @@ serial_open_devices = (struct open_serial_device *)realloc(serial_open_devices, 
 memset(&serial_open_devices[serial_open_device_count-1], 0, sizeof(serial_open_devices[serial_open_device_count-1]));
 serial_open_devices[serial_open_device_count-1].port = port;
 serial_open_devices[serial_open_device_count-1].line = line;
-strncpy(serial_open_devices[serial_open_device_count-1].name, name, sizeof(serial_open_devices[serial_open_device_count-1].name)-1);
+strlcpy(serial_open_devices[serial_open_device_count-1].name, name, sizeof(serial_open_devices[serial_open_device_count-1].name));
 if (config)
-    strncpy(serial_open_devices[serial_open_device_count-1].config, config, sizeof(serial_open_devices[serial_open_device_count-1].config)-1);
+    strlcpy(serial_open_devices[serial_open_device_count-1].config, config, sizeof(serial_open_devices[serial_open_device_count-1].config));
 return &serial_open_devices[serial_open_device_count-1];
 }
 
@@ -811,7 +811,7 @@ if (bits_to_clear&TMXR_MDM_RTS)
         }
 if (incoming_bits) {
     DWORD ModemStat;
-    if (GetCommModemStatus (port->hPort, &ModemStat)) {
+    if (!GetCommModemStatus (port->hPort, &ModemStat)) {
         sim_error_serial ("GetCommModemStatus", (int) GetLastError ());
         return SCPE_IOERR;
         }
