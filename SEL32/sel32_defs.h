@@ -158,7 +158,7 @@ extern DEVICE lpr_dev;
 
 /* Memory */
 
-#define MAXMEMSIZE  ((16*1024*1024)/4)      /* max memory size */
+#define MAXMEMSIZE  ((16*1024*1024)/4)      /* max memory size in 32bit words */
 #define PAMASK      (MAXMEMSIZE - 1)        /* physical addr mask */
 #define MEMSIZE     (cpu_unit.capac)        /* actual memory size */
 #define MEM_ADDR_OK(x)  (((x)) < MEMSIZE)
@@ -314,12 +314,15 @@ extern DEBTAB dev_debug[];
 #define CONSOLEATN_TRAP 0xB4                /* Console Attention Trap */
 #define PRIVHALT_TRAP   0xB8                /* Privlege Mode Halt Trap */
 #define AEXPCEPT_TRAP   0xBC                /* Arithmetic Exception Trap */
+#define CACHEERR_TRAP   0xC0                /* Cache Error Trap (V9 Only) */
+#define DEMANDPG_TRAP   0xC4                /* Demand Page Fault Trap (V6&V9 Only) */
 
 /* Errors returned from various functions */
 #define ALLOK   0x0000                      /* no error, all is OK */
 #define MAPFLT  MAPFAULT_TRAP               /* map fault error */
 #define NPMEM   NONPRESMEM_TRAP             /* non present memory */
 #define MPVIOL  PRIVVIOL_TRAP               /* memory protection violation */
+#define DMDPG   DEMANDPG_TRAP               /* Demand Page Fault Trap (V6&V9 Only) */
 
 /* general instruction decode equates */
 #define IND     0x00100000                  /* indirect bit in instruction, bit 11 */

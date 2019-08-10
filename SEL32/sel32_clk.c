@@ -125,7 +125,7 @@ t_stat rtc_srv (UNIT *uptr)
 /* level = interrupt level */
 void rtc_setup(uint32 ss, uint32 level)
 {
-    uint32  val = SPAD[level+0x80];                 /* get SPAD value for interrupt vector */
+    uint32 val = SPAD[level+0x80];                  /* get SPAD value for interrupt vector */
     uint32 addr = SPAD[0xf1] + (level<<2);          /* vector address in SPAD */
 
     rtc_lvl = level;                                /* save the interrupt level */
@@ -133,7 +133,6 @@ void rtc_setup(uint32 ss, uint32 level)
     if (ss == 1) {                                  /* starting? */
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
-        INTS[level] |= INTS_REQ;                    /* request the interrupt */
         sim_activate(&rtc_unit, 20);                /* start us off */
     } else {
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
@@ -146,7 +145,6 @@ void rtc_setup(uint32 ss, uint32 level)
 t_stat rtc_reset(DEVICE *dptr)
 {
     rtc_pie = 0;                                    /* disable pulse */
-//MARKFIX rtc_unit.wait = sim_rtcn_init(rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
     rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
     sim_activate (&rtc_unit, rtc_unit.wait);        /* activate unit */
     return SCPE_OK;
@@ -196,6 +194,8 @@ const char *rtc_desc(DEVICE *dptr)
 
 /* Interval Timer support */
 int32 itm_pie = 0;                                  /* itm pulse enable */
+int32 itm_cmd = 0;                                  /* itm last user cmd */
+int32 itm_cnt = 0;                                  /* itm pulse count enable */
 int32 itm_tick_size_x_100 = 3840;                   /* itm 26041 ticks/sec = 38.4 us per tic */
 int32 itm_lvl = 0x5f;                               /* itm interrupt level */
 t_stat itm_srv (UNIT *uptr);
@@ -216,6 +216,8 @@ UNIT itm_unit = { UDATA (&itm_srv, UNIT_IDLE, 0), 26042, UNIT_ADDR(0x7F04)};
 
 REG itm_reg[] = {
     { FLDATA (PIE, itm_pie, 0) },
+    { FLDATA (CNT, itm_cnt, 0) },
+    { FLDATA (CMD, itm_cmd, 0) },
     { DRDATA (TICK_SIZE, itm_tick_size_x_100, 32), PV_LEFT + REG_HRO },
     { NULL }
     };
@@ -253,13 +255,19 @@ t_stat itm_srv (UNIT *uptr)
     if (itm_pie) {                              /* interrupt enabled? */
         INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt on zero value */
         irq_pend = 1;                           /* make sure we scan for int */
+        if (itm_cmd == 0x3d) {
+            /* restart timer with value from user */
+            sim_activate_after_abs_d (&itm_unit, ((double)itm_cnt * itm_tick_size_x_100) / 100.0);
+        }
     }   
     return SCPE_OK;
 }
 
 /* ITM read/load function called from CD command processing */
 /* level = interrupt level */
-/* cmd = 0x39 load and enable interval timer, no return value */
+/* cmd = 0x20 stop timer, do not transfer any value */
+/*     = 0x39 load and enable interval timer, no return value */
+/*     = 0x3d load and enable interval timer, countdown to zero, interrupt and reload */
 /*     = 0x40 read timer value */
 /*     = 0x60 read timer value and stop timer */
 /*     = 0x79 read/reload and start timer */
@@ -268,12 +276,25 @@ t_stat itm_srv (UNIT *uptr)
 int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
 {
     uint32  temp;
+
+    itm_cmd = cmd;                                  /* save last cmd */
     switch (cmd) {
+    case 0x20:                                      /* stop timer */
+        sim_cancel (&itm_unit);                     /* cancel itc */
+        itm_cnt = 0;                                /* no count reset value */
+        return 0;                                   /* does not matter, no value returned  */
     case 0x39:                                      /* load timer with new value and start*/
         if (cnt < 0)
             cnt = 26042;                            /* TRY ??*/
         /* start timer with value from user */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        sim_cancel (&itm_unit);
+        itm_cnt = 0;                                /* no count reset value */
+        return 0;                                   /* does not matter, no value returned  */
+    case 0x3d:                                      /* load timer with new value and start*/
+        /* start timer with value from user, reload on zero time */
+        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        itm_cnt = cnt;                              /* count reset value */
         return 0;                                   /* does not matter, no value returned  */
     case 0x60:                                      /* read and stop timer */
         /* get timer value and stop timer */
@@ -285,6 +306,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
         /* start timer to fire after cnt ticks */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        itm_cnt = 0;                                /* no count reset value */
         return temp;                                /* return current count value */
     case 0x40:                                      /* read the current timer value */
         /* return current count value */
@@ -304,7 +326,7 @@ void itm_setup(uint32 ss, uint32 level)
     if (ss == 1) {                                  /* starting? */
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
-        INTS[level] |= INTS_REQ;                    /* request the interrupt */
+//DIAG  INTS[level] |= INTS_REQ;                    /* request the interrupt */
         sim_cancel (&itm_unit);                     /* not running yet */
     } else {
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
