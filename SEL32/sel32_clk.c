@@ -280,6 +280,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
     itm_cmd = cmd;                                  /* save last cmd */
     switch (cmd) {
     case 0x20:                                      /* stop timer */
+//        fprintf(stderr, "clk kill value %x\n", cnt);
         sim_cancel (&itm_unit);                     /* cancel itc */
         itm_cnt = 0;                                /* no count reset value */
         return 0;                                   /* does not matter, no value returned  */
@@ -288,10 +289,10 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
             cnt = 26042;                            /* TRY ??*/
         /* start timer with value from user */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
-        sim_cancel (&itm_unit);
         itm_cnt = 0;                                /* no count reset value */
         return 0;                                   /* does not matter, no value returned  */
     case 0x3d:                                      /* load timer with new value and start*/
+//        fprintf(stderr, "clk init value %x\n", cnt);
         /* start timer with value from user, reload on zero time */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         itm_cnt = cnt;                              /* count reset value */
