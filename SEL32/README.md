@@ -2,8 +2,10 @@
 # SEL32 Development Simulator
 
 This is a working copy of a simulator for the SEL Concept/32 computer.
-The current test version is for the SEL 32/27, 32/67, 32/87, 32/97 computers.
-Support for 32/55, 32/75, V6, and V9 computers may be added in the future.
+The current test version is for the SEL 32/27, 32/67, 32/77, 32/87 and
+32/97 computers.  Initial support is provided for the V6 and V9 cpus.
+Support for 32/55 and extended support for the V6 and V9 computers may
+be added in the future.
 
 # SEL Concept/32 
 
@@ -15,7 +17,7 @@ support has been added for excess 64 floating point arithmetic.  More testing
 is still required.  The sim32disk.gz can be uncompressed and booted with the
 sel32.27.sim32.disk.ini initialization file.  The sim32sdt.tap.gz file can
 also be uncompressed and started with the sel32.27.sim32.tape.ini initialization
-file to install from tape.
+file to install to disk from tape.
 
 Available tap tools:
 taptools.tgz - set of tools to work with .tap formatted tapes.  Also tools
@@ -46,16 +48,21 @@ diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
                to 32/27, 32/67, 32/97, or V9.  V6 will not work at this time.
                VM.CP1 runs 127 instruction tests w and w/o arithmetic exceotion
                enable.  100 passes work fine.
-               VM.CP2 runs 94 different tests in various modes.  Currently fails
-               at some point to be figured out.  Testing is extremely difficult
-               without any source for the diagnostics.  Updates to follow as
-               tests are corrected.
+               VM.CP2 runs 94 different tests in various modes.  100 passes work
+               VM.CP3 runs tests in various modes.  100 passes work fine.
+               VM.EAD runs tests in various modes.  4 passes work fine.
+               VM.BRD runs tests in various modes.  100 passes work fine.
+               VM.INT runs tests in various modes.  4 passes work fine.
+               VM.TRP runs up to test 8 before failing with lost clock interrupt.
+
+               Testing is extremely difficult without any source for the diagnostics.
+               Updates to follow as tests are corrected.
 
 Available UTX-21a install tape for testing:
 utxtape1.ini   command file to start UTX install tape.  ./sel32 utxtape1.ini
 utx21a1.tap    bootable UTX install tape for testing basemode.  The current
                simulator will only boot part of the system before receiving
-               an error.  Not all basemode instructions have been tested yet.
+               an error.  All basemode instructions have been tested.
 
 Other MPX verion support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
@@ -63,5 +70,5 @@ Other MPX verion support:
                Please keep looking for anyone who can provide these tapes.
 
 James C. Bevier
-07/18/2019
+09/01/2019
  
