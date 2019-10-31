@@ -47,27 +47,27 @@ diag.ini       command file to start diags. ./sel32 diag.ini
 diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
                to 32/27, 32/67, 32/97, or V9.  V6 will not work at this time.
 
-               CV.CP1 runs 127 instruction tests w and w/o arithmetic exceotion
+               VM.CP1 runs 127 instruction tests w and w/o arithmetic exceotion
                       enable.  100 passes work fine.
-               CV.CP2 runs 94 different tests in various modes.  100 passes work
-               CV.CP3 runs tests in various modes.  100 passes work fine.
-               CV.EAD Effective adddress diag runs tests in various modes.
+               VM.CP2 runs 94 different tests in various modes.  100 passes work
+               VM.CP3 runs tests in various modes.  100 passes work fine.
+               VM.EAD Effective adddress diag runs tests in various modes.
                       4 passes work fine.
-               CV.BRD Base register diag runs tests in various modes.  100 passes
+               VM.BRD Base register diag runs tests in various modes.  100 passes
                       work fine.
-               CV.INT runs interrupt tests in various modes.  4 passes work fine.
-               CV.TRP runs trap tests in various modes. 4 passes work fine.  32/67
+               VM.INT runs interrupt tests in various modes.  4 passes work fine.
+               VM.TRP runs trap tests in various modes. 4 passes work fine.  32/67
                       fails with halt in this test. V9 fails with loop.
-               CV.CMD cache/shadow mwmory. Not for SEL 32/27 skipped.  32/87 and
+               VM.CMD cache/shadow mwmory. Not for SEL 32/27 skipped.  32/87 and
                       32/97 fails with halt in this test.
                CN.MMM Mapped memory management runs 1 pass fine. Not for V9.
                VM.MMM Virtual memory diag.  Not for SEL 32/27 skipped. V6 and V9
                       fails in test 7 with halt.
-               CV.IPT IPU diags. Not for SEL-32 simulator yet, skipped.
-               CV.CSD Control store diag.  Not for SEL 32/27 skipped.
-               CV.CON IOP Console diag.  Have halt with unknown origin on 32/27.
+               VM.IPT IPU diags. Not for SEL-32 simulator yet, skipped.
+               VM.CSD Control store diag.  Not for SEL 32/27 skipped.
+               VM.CON IOP Console diag.  Have halt with unknown origin on 32/27.
 
-               CV.CON is the last diag.
+               VM.CON is the last diag.
 
                Testing is extremely difficult without any source for the diagnostics.
                Updates to follow as tests are corrected.
