@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 # SEL32 Development Simulator
 
@@ -86,3 +87,6 @@ Other MPX versions support:
 James C. Bevier
 09/17/2019
 
+=======
+# sims
+>>>>>>> parent of bdd1dc5... SEL32: Change print fields in debug statements to fixed length.
