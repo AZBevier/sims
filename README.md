@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 # SEL32 Development Simulator
 
@@ -78,11 +79,14 @@ utx21a1.tap    bootable UTX install tape for testing basemode.  The current
                simulator will only boot part of the system before receiving
                an error.  All basemode instructions have been tested.
 
-Other MPX verion support:
+Other MPX versions support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
-               much of the source, but no loadable code to creat a bootable system.
+               much of the source, but no loadable code to create a bootable system.
                Please keep looking for anyone who can provide these tapes.
 
 James C. Bevier
 09/17/2019
 
+=======
+# sims
+>>>>>>> parent of bdd1dc5... SEL32: Change print fields in debug statements to fixed length.
