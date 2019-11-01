@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 # SEL32 Development Simulator
 
 This is a working copy of a simulator for the SEL Concept/32 computer.
@@ -86,7 +84,3 @@ Other MPX versions support:
 
 James C. Bevier
 09/17/2019
-
-=======
-# sims
->>>>>>> parent of bdd1dc5... SEL32: Change print fields in debug statements to fixed length.
