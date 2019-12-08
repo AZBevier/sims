@@ -90,7 +90,7 @@ diagcopy - This program reads a SEL diagnostic boot tape and splits
            auto execute file.  It is a MPX blocked file where the first
            word of each 768 char block contains 0x0003f3b8.  It can be
            read using the deblk utility in the taptools directory.
-           The following diagnostic fileis on the tape are written to
+           The following diagnostic files on the tape are written to
            files named diagfileNN where NN is relative file number on
            the tape.  These records are all multiple of 768 bytes each
            and contain binary programs.
