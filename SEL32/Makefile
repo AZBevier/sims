@@ -1070,13 +1070,13 @@ ifneq ($(DONT_USE_READER_THREAD),)
 endif
 
 CC_OUTSPEC = -o $@
-##CC := $(GCC) $(CC_STD) -Wall -D__STRICT_ANSI__ $(CFLAGS_G) $(CFLAGS_O) $(CFLAGS_GIT) $(CFLAGS_I) -DSIM_COMPILER="$(COMPILER_NAME)" -g  -I .. $(OS_CCDEFS) $(ROMS_OPT)
+##CC := $(GCC) $(CC_STD) -Wall -Wno-address -D__STRICT_ANSI__ $(CFLAGS_G) $(CFLAGS_O) $(CFLAGS_GIT) $(CFLAGS_I) -DSIM_COMPILER="$(COMPILER_NAME)" -g  -I .. $(OS_CCDEFS) $(ROMS_OPT)
 CC := $(GCC) $(CC_STD) -D__STRICT_ANSI__ $(CFLAGS_G) $(CFLAGS_O) $(CFLAGS_GIT) $(CFLAGS_I) -DSIM_COMPILER="$(COMPILER_NAME)" -g  -I .. $(OS_CCDEFS) $(ROMS_OPT)
 LDFLAGS := $(OS_LDFLAGS) $(NETWORK_LDFLAGS) $(LDFLAGS_O)
 
 #
 # Common Libraries
-#
+
 BIN = ./
 SIM = ../scp.c ../sim_console.c ../sim_fio.c ../sim_timer.c ../sim_sock.c \
 	../sim_tmxr.c ../sim_ether.c ../sim_tape.c ../sim_disk.c ../sim_serial.c \
