@@ -1,10 +1,10 @@
+
 # SEL32 Development Simulator
 
 This is a working copy of a simulator for the SEL Concept/32 computer.
 The current test version is for the SEL 32/27, 32/67, 32/77, 32/87 and
 32/97 computers.  Initial support is provided for the V6 and V9 cpus.
-Support for 32/55 and extended support for the V6 and V9 computers may
-be added in the future.
+Support for 32/55 computers may be added in the future.
 
 # SEL Concept/32 
 
@@ -44,43 +44,44 @@ sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
 Available Level One Diagnostic boot tape:
 diag.ini       command file to start diags. ./sel32 diag.ini
 diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
-               to 32/27, 32/67, 32/97, or V9.  V6 will not work at this time.
+               to 32/27, 32/67, 32/87, 32/97, V6 or V9.  32/97 and V9 diags 
+               halt at test 46,subtest 2 in the CN.MMM & VM.MMM diags.  The
+               rest of the machines stop in the CN.COM console diagnostic.
 
-               CV.CP1 runs 127 instruction tests w and w/o arithmetic exceotion
-                      enable.  100 passes work fine.
-               CV.CP2 runs 94 different tests in various modes.  100 passes work
-               CV.CP3 runs tests in various modes.  100 passes work fine.
-               CV.EAD Effective adddress diag runs tests in various modes.
-                      4 passes work fine.
-               CV.BRD Base register diag runs tests in various modes.  100 passes
-                      work fine.
-               CV.INT runs interrupt tests in various modes.  4 passes work fine.
-               CV.TRP runs trap tests in various modes. 4 passes work fine.  32/67
-                      fails with halt in this test. V9 fails with loop.
-               CV.CMD cache/shadow mwmory. Not for SEL 32/27 skipped.  32/87 and
-                      32/97 fails with halt in this test.
-               CN.MMM Mapped memory management runs 1 pass fine. Not for V9.
-               VM.MMM Virtual memory diag.  Not for SEL 32/27 skipped. V6 and V9
-                      fails in test 7 with halt.
-               CV.IPT IPU diags. Not for SEL-32 simulator yet, skipped.
-               CV.CSD Control store diag.  Not for SEL 32/27 skipped.
-               CV.CON IOP Console diag.  Have halt with unknown origin on 32/27.
+               CV.CSL - Firmware control diag.  Disabled in auto testing.
+               CV.CP1 - CPU diag part 1 runs OK.
+               CV.CP2 - CPU diag part 2 runs OK.
+               CV.CP3 - CPU diag part 3 runs OK.
+               CV.EAD - Effective address diag runs OK.
+               CV.BRD - Base register instruction diag runs OK, except 32/27.
+               CV.INT - Interrupt diag runs OK.
+               CV.TRP - Traps diag runs OK.
+               CV.CMD - Cache/Shadow diag.  Disabled in auto testing.
+               CN.MMM - Non virtual memory diag runs OK, except for 32/97.
+               VM.MMM - virtual memory diag for V6 & V9 runs OK, except for V9.
+               CV.IPT - IPU trap diag.  Disabled in auto testing.
+               CV.CSD - WCS read/write trap diag.  Disabled in auto testing.
+               CV.CON - Operators Console diag halts at 0x852e for all CPUs.
 
-               CV.CON is the last diag.
-
-               Testing is extremely difficult without any source for the diagnostics.
-               Updates to follow as tests are corrected.
+               Set GPR[0] = 0xffffffff before booting from tape to disable the
+               auto test and go to the Diagnostic Overlay Loader (DOL>) prompt.
+               Testing is extremely difficult without any source for the
+               diagnostics.  Updates to follow as tests are corrected.
 
 Available UTX-21a install tape for testing:
 utxtape1.ini   command file to start UTX install tape.  ./sel32 utxtape1.ini
 utx21a1.tap    bootable UTX install tape for testing basemode.  The current
-               simulator will only boot part of the system before receiving
-               an error.  All basemode instructions have been tested.
+               V6 & V9 will boot to wait mode without any console prompt. All
+               basemode instructions have been tested with the CV.BRD diag.
+               UTX needs better support for the console terminal before we
+               move any farther.
 
-Other MPX versions support:
+Other MPX verion support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
-               much of the source, but no loadable code to create a bootable system.
-               Please keep looking for anyone who can provide these tapes.
+               much of the source, but no loadable code to creat a bootable system.
+               Please keep looking for anyone who can provide these tapes or a
+               disk image of a bootable system..
 
 James C. Bevier
-09/17/2019
+12/31/2019
+
