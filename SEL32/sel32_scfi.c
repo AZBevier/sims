@@ -246,9 +246,9 @@ scfi_type[] =
 
 uint8   scfi_preio(UNIT *uptr, uint16 chan);
 uint8   scfi_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
-uint8   scfi_haltio(uint16 addr);
+uint8   scfi_haltio(UNIT *uptr);
 t_stat  scfi_srv(UNIT *);
-t_stat  scfi_boot(int32, DEVICE *);
+t_stat  scfi_boot(int32 unitnum, DEVICE *);
 void    scfi_ini(UNIT *, t_bool);
 t_stat  scfi_reset(DEVICE *);
 t_stat  scfi_attach(UNIT *, CONST char *);
@@ -304,6 +304,7 @@ DEVICE          sda_dev = {
     "SDA", sda_unit, NULL, scfi_mod,
     NUM_UNITS_SCFI, 16, 24, 4, 16, 32,
     NULL, NULL, &scfi_reset, &scfi_boot, &scfi_attach, &scfi_detach,
+    /* ctxt is the DIB pointer */
     &sda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &scfi_help, NULL, NULL, &scfi_description
 };
@@ -347,6 +348,7 @@ DEVICE          sdb_dev = {
     "SDB", sdb_unit, NULL, scfi_mod,
     NUM_UNITS_SCFI, 16, 24, 4, 16, 32,
     NULL, NULL, &scfi_reset, &scfi_boot, &scfi_attach, &scfi_detach,
+    /* ctxt is the DIB pointer */
     &sdb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &scfi_help, NULL, NULL, &scfi_description
 };
@@ -682,6 +684,8 @@ rezero:
         /* just seek to the location where we will r/w data */
         if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* seek home */
             sim_debug(DEBUG_DETAIL, dptr, "scfi_srv Error on seek to %08x\n", tstart);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
         }
 
         /* Check if already on correct cylinder */
@@ -963,6 +967,7 @@ int scfi_format(UNIT *uptr) {
     /* seek to sector 0 */
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
         fprintf (stderr, "Error on seek to 0\r\n");
+        return 1;
     }
 
     /* get buffer for track data */
@@ -996,7 +1001,10 @@ int scfi_format(UNIT *uptr) {
     fputc('\r', stderr);
     fputc('\n', stderr);
     /* seek home again */
-    sim_fseek(uptr->fileref, 0, SEEK_SET);      /* seek home */
+    if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
+        fprintf (stderr, "Error on seek to 0\r\n");
+        return 1;
+    }
     free(buff);                                 /* free cylinder buffer */
     set_devattn(addr, SNS_DEVEND);              /* start us up */
     return 0;

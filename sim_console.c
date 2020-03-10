@@ -182,6 +182,13 @@ int32 sim_del_char = '\b';                              /* delete character */
 #else
 int32 sim_del_char = 0177;
 #endif
+t_bool sim_signaled_int_char                            /* WRU character detected by signal while running */
+#if defined (_WIN32) || defined (_VMS) || defined (__CYGWIN__)
+                             = FALSE;
+#else
+                             = TRUE;
+#endif
+uint32 sim_last_poll_kbd_time;                          /* time when sim_poll_kbd was called */
 extern TMLN *sim_oline;                                 /* global output socket */
 
 static t_stat sim_con_poll_svc (UNIT *uptr);                /* console connection poll routine */
@@ -430,7 +437,7 @@ if (*cptr == 0) {                                       /* show all */
 while (*cptr != 0) {
     cptr = get_glyph (cptr, gbuf, ',');                 /* get modifier */
     if ((shptr = find_shtab (show_con_tab, gbuf)))
-        shptr->action (st, dptr, uptr, shptr->arg, cptr);
+        shptr->action (st, dptr, uptr, shptr->arg, NULL);
     else return SCPE_NOPARAM;
     }
 return SCPE_OK;
@@ -2835,6 +2842,7 @@ t_stat sim_poll_kbd (void)
 {
 t_stat c;
 
+sim_last_poll_kbd_time = sim_os_msec ();                    /* record when this poll happened */
 if (sim_send_poll_data (&sim_con_send, &c))                 /* injected input characters available? */
     return c;
 if (!sim_rem_master_mode) {
@@ -4211,7 +4219,7 @@ static t_stat sim_os_putchar (int32 out)
 char c;
 
 c = out;
-(void)write (1, &c, 1);
+if (write (1, &c, 1)) {};
 return SCPE_OK;
 }
 
