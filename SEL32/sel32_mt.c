@@ -39,21 +39,8 @@
 #include "sel32_defs.h"
 #include "sim_tape.h"
 
-extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern  t_stat  show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chan, uint8 flags);
-extern  int     chan_read_byte(uint16 chan, uint8 *data);
-extern  int     chan_write_byte(uint16 chan, uint8 *data);
-extern  void    set_devattn(uint16 addr, uint8 flags);
-extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
-extern  DEVICE *get_dev(UNIT *uptr);
-extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
-extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
+#if NUM_DEVS_MT > 0
 
-extern  uint32  M[];                            /* our memory */
-extern  uint32  SPAD[];                         /* cpu SPAD */
-
-#ifdef NUM_DEVS_MT
 #define BUFFSIZE        (64 * 1024)
 #define UNIT_MT         UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
@@ -571,6 +558,7 @@ t_stat mt_srv(UNIT *uptr)
             }
             /* just dump data */
         }
+#ifdef CHANGE_FOR_UTX_TEST
         /* a BTP uses a 41 word INCH memory buffer */
 //      for (i=0; i<41; i++) {
         for (i=0; i<9; i++) {
@@ -584,6 +572,7 @@ t_stat mt_srv(UNIT *uptr)
             else
                 WMW(mema+(4*i),0);              /* zero work location */
         }
+#endif
         /* the chp->ccw_addr location contains the inch address */
         /* call set_inch() to setup inch buffer */
         i = set_inch(uptr, mema);               /* new address */

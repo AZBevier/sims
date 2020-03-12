@@ -179,6 +179,7 @@ extern DEVICE lpr_dev;
 #define PAMASK      (MAXMEMSIZE - 1)        /* physical addr mask */
 #define MEMSIZE     (cpu_unit.capac)        /* actual memory size */
 #define MEM_ADDR_OK(x)  (((x)) < MEMSIZE)
+#define MEMSIZEP1 (MEMSIZE+1)               /* memory size rounded to 128KW multiple */
 
 /* channel program data for a chan/sub-address */
 typedef struct chp {
@@ -432,4 +433,22 @@ extern DEBTAB dev_debug[];
 #define RMR(a) ((a)&2?(MAPC[(a)>>2]&RMASK):(MAPC[(a)>>2]>>16)&RMASK)
 /* write halfword map register to MAP cache address */
 #define WMR(a,d) ((a)&2?(MAPC[(a)>>2]=(MAPC[(a)>>2]&LMASK)|((d)&RMASK)):(MAPC[(a)>>2]=(MAPC[(a)>>2]&RMASK)|((d)<<16)))
+
+/* Definitions for common used functions */
+extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+extern  t_stat  show_dev_addr(FILE * st, UNIT *uptr, int32 v, CONST void *desc);
+extern  void    chan_end(uint16 chan, uint16 flags);
+extern  int     chan_read_byte(uint16 chsa, uint8 *data);
+extern  int     chan_write_byte(uint16 chsa, uint8 *data);
+extern  void    set_devattn(uint16 addr, uint16 flags);
+extern  void    set_devwake(uint16 chsa, uint16 flags);
+extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
+extern  int     test_write_byte_end(uint16 chsa);
+extern  DEVICE *get_dev(UNIT *uptr);
+extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
+extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
+
+extern  uint32  M[];                            /* our memory */
+extern  uint32  SPAD[];                         /* cpu SPAD memory */
+extern  uint32  attention_trap;
 
