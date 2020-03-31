@@ -12,7 +12,7 @@
  *         - -l = library/directory file 0xff
  *         - -o = other 0x00
  *         - -a = append entries to current file
- *          - -u = username (directory)
+ *         - -u = username (directory)
  * 11/26/2018
  */
 
