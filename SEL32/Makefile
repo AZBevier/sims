@@ -36,6 +36,10 @@
 # simulators without networking support, invoking GNU make with 
 # NONETWORK=1 will do the trick.
 #
+# By default, video support is enabled if the SDL/SDL2 development
+# headers and libraries are available.  To force a build without video
+# support, invoke GNU make with NOVIDEO=1.
+#
 # The default build will build compiler optimized binaries.
 # If debugging is desired, then GNU make can be invoked with
 # DEBUG=1 on the command line.
@@ -105,6 +109,10 @@ ifneq (,$(findstring besm6,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
   BESM6_BUILD = true
 endif
+# building the Imlac needs video support
+ifneq (,$(findstring imlac,${MAKECMDGOALS}))
+  VIDEO_USEFUL = true
+endif
 # building the PDP6, KA10 or KI10 needs video support
 ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
   VIDEO_USEFUL = true
@@ -145,6 +153,23 @@ endif
 ifneq ($(NONETWORK),)
   NETWORK_USEFUL =
 endif
+# ... or without video support
+ifneq ($(NOVIDEO),)
+  VIDEO_USEFUL =
+endif
+ifneq ($(findstring Windows,${OS}),)
+  ifeq ($(findstring .exe,${SHELL}),.exe)
+    # MinGW
+    WIN32 := 1
+    # Tests don't run under MinGW
+    TESTS := 0
+  else # Msys or cygwin
+    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+      $(info *** This makefile can not be used with the Msys bash shell)
+      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+    endif
+  endif
+endif
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
 find_lib = $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(wildcard $(dir)/lib$(1).${LIBEXT})))))
 find_include = $(abspath $(strip $(firstword $(foreach dir,$(strip ${INCPATH}),$(wildcard $(dir)/$(1).h)))))
@@ -153,17 +178,6 @@ ifneq (0,$(TESTS))
   TESTING_FEATURES = - Per simulator tests will be run
 else
   TESTING_FEATURES = - Per simulator tests will be skipped
-endif
-ifneq ($(findstring Windows,${OS}),)
-  ifeq ($(findstring .exe,${SHELL}),.exe)
-    # MinGW
-    WIN32 := 1
-  else # Msys or cygwin
-    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
-      $(info *** This makefile can not be used with the Msys bash shell)
-      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
-    endif
-  endif
 endif
 ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   ifeq (${GCC},)
@@ -248,8 +262,11 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       NEED_COMMIT_ID = need-commit-id
     endif
     ifeq (need-commit-id,$(NEED_COMMIT_ID))
+      ifneq (,$(shell git update-index --refresh --))
+        GIT_EXTRA_FILES=+uncommitted-changes
+      endif
       isodate=$(shell git log -1 --pretty="%ai"|sed -e 's/ /T/'|sed -e 's/ //')
-      $(shell git log -1 --pretty="SIM_GIT_COMMIT_ID %H%nSIM_GIT_COMMIT_TIME $(isodate)" >.git-commit-id)
+      $(shell git log -1 --pretty="SIM_GIT_COMMIT_ID %H$(GIT_EXTRA_FILES)%nSIM_GIT_COMMIT_TIME $(isodate)" >.git-commit-id)
     endif
   endif
   LTO_EXCLUDE_VERSIONS = 
@@ -588,37 +605,11 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAY340 = ${DISPLAYD}/type340.c
           DISPLAYNG = ${DISPLAYD}/ng.c
           DISPLAYIII = ${DISPLAYD}/iii.c
+          DISPLAYIMLAC = ${DISPLAYD}/imlac.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
           $(info using libSDL2: $(call find_include,SDL2/SDL))
           ifeq (Darwin,$(OSTYPE))
             VIDEO_CCDEFS += -DSDL_MAIN_AVAILABLE
-          endif
-        endif
-      endif
-    else
-      ifneq (,$(call find_include,SDL/SDL))
-        ifneq (,$(call find_lib,SDL))
-          ifneq (,$(findstring Haiku,$(OSTYPE)))
-            ifneq (,$(shell which sdl-config))
-              SDLX_CONFIG = sdl-config
-            endif
-          else
-            SDLX_CONFIG = $(realpath $(dir $(call find_include,SDL/SDL))../../bin/sdl-config)
-          endif
-          ifneq (,$(SDLX_CONFIG))
-            VIDEO_CCDEFS += -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags`
-            VIDEO_LDFLAGS += `$(SDLX_CONFIG) --libs`
-            VIDEO_FEATURES = - video capabilities provided by libSDL (Simple Directmedia Layer)
-            DISPLAYL = ${DISPLAYD}/display.c $(DISPLAYD)/sim_ws.c
-            DISPLAYVT = ${DISPLAYD}/vt11.c
-            DISPLAY340 = ${DISPLAYD}/type340.c
-            DISPLAYNG = ${DISPLAYD}/ng.c
-            DISPLAYIII = ${DISPLAYD}/iii.c
-            DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
-            $(info using libSDL: $(call find_include,SDL/SDL))
-            ifeq (Darwin,$(OSTYPE))
-              VIDEO_CCDEFS += -DSDL_MAIN_AVAILABLE
-            endif
           endif
         endif
       endif
@@ -1015,7 +1006,10 @@ else
     endif
     ifeq (commit-id-exists,$(shell if exist .git-commit-id echo commit-id-exists))
       CURRENT_GIT_COMMIT_ID=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_ID" .git-commit-id)") do echo %%i)
-      ACTUAL_GIT_COMMIT_ID=$(strip $(shell git log -1 --pretty=%H))
+      ifneq (, $(shell git update-index --refresh --))
+        ACTUAL_GIT_COMMIT_EXTRAS=+uncommitted-changes
+      endif
+      ACTUAL_GIT_COMMIT_ID=$(strip $(shell git log -1 --pretty=%H))$(ACTUAL_GIT_COMMIT_EXTRAS)
       ifneq ($(CURRENT_GIT_COMMIT_ID),$(ACTUAL_GIT_COMMIT_ID))
         NEED_COMMIT_ID = need-commit-id
         # make sure that the invalidly formatted .git-commit-id file wasn't generated
@@ -1028,10 +1022,13 @@ else
       NEED_COMMIT_ID = need-commit-id
     endif
     ifeq (need-commit-id,$(NEED_COMMIT_ID))
-      commit_id=$(shell git log -1 --pretty=%H)
+      ifneq (, $(shell git update-index --refresh --))
+        ACTUAL_GIT_COMMIT_EXTRAS=+uncommitted-changes
+      endif
+      ACTUAL_GIT_COMMIT_ID=$(strip $(shell git log -1 --pretty=%H))$(ACTUAL_GIT_COMMIT_EXTRAS)
       isodate=$(shell git log -1 --pretty=%ai)
       commit_time=$(word 1,$(isodate))T$(word 2,$(isodate))$(word 3,$(isodate))
-      $(shell echo SIM_GIT_COMMIT_ID $(commit_id)>.git-commit-id)
+      $(shell echo SIM_GIT_COMMIT_ID $(ACTUAL_GIT_COMMIT_ID)>.git-commit-id)
       $(shell echo SIM_GIT_COMMIT_TIME $(commit_time)>>.git-commit-id)
     endif
   endif
@@ -1221,17 +1218,18 @@ endif
 
 CC_OUTSPEC = -o $@
 ##XXXCC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
-##XXXCC := ${GCC} ${CC_STD} -Wall -Wsign-conversion -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
+##XXXCC := ${GCC} ${CC_STD} -Wall -Wsign-conversion -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
 ##CC := ${GCC} ${CC_STD} -Wall -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
 CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
 LDFLAGS := ${OS_LDFLAGS} ${NETWORK_LDFLAGS} ${LDFLAGS_O}
+
 #
 # Common Libraries
 #
 ##XXXBIN = BIN/
 BIN = ./
 ##XXXSIMHD = .
-SIMHD = ../
+SIMHD = ..
 SIM = ${SIMHD}/scp.c ${SIMHD}/sim_console.c ${SIMHD}/sim_fio.c \
 	${SIMHD}/sim_timer.c ${SIMHD}/sim_sock.c ${SIMHD}/sim_tmxr.c \
 	${SIMHD}/sim_ether.c ${SIMHD}/sim_tape.c ${SIMHD}/sim_disk.c \
@@ -1963,13 +1961,11 @@ ifneq (,$(BESM6_BUILD))
           endif
         else
           ifneq (,$(and $(findstring Linux,$(OSTYPE)),$(call find_exe,apt-get)))
-            $(info *** Info *** Install the development components of libSDL-ttf or libSDL2-ttf)
+            $(info *** Info *** Install the development components of libSDL2-ttf)
             $(info *** Info *** packaged for your Linux operating system distribution:)
             $(info *** Info ***        $$ sudo apt-get install libsdl2-ttf-dev)
-            $(info *** Info ***    or)
-            $(info *** Info ***        $$ sudo apt-get install libsdl-ttf-dev)
           else
-            $(info *** Info *** Install the development components of libSDL-ttf packaged by your)
+            $(info *** Info *** Install the development components of libSDL2-ttf packaged by your)
             $(info *** Info *** operating system distribution and rebuild your simulator to)
             $(info *** Info *** enable this extra functionality.)
           endif
@@ -1979,10 +1975,6 @@ ifneq (,$(BESM6_BUILD))
         $(info using libSDL2_ttf: $(call find_lib,SDL2_ttf) $(call find_include,SDL2/SDL_ttf))
         $(info ***)
         BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL2_ttf
-    else ifneq (,$(and $(call find_include,SDL/SDL_ttf),$(call find_lib,SDL_ttf)))
-        $(info using libSDL_ttf: $(call find_lib,SDL_ttf) $(call find_include,SDL/SDL_ttf))
-        $(info ***)
-        BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL_ttf
     endif
 endif
 
@@ -2048,7 +2040,7 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	${KA10D}/pdp6_dtc.c ${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c \
 	${KA10D}/pdp6_dcs.c ${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c \
 	${PDP10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${KA10D}/kx10_disk.c \
-	${DISPLAYL} ${DISPLAY340} ${DISPLAYIII}
+        ${PDP10D}/ka10_pclk.c ${DISPLAYL} ${DISPLAY340} ${DISPLAYIII}
 KA10_OPT = -DKA=1 -DUSE_INT64 -I ${KA10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KA10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
@@ -2601,6 +2593,7 @@ ${BIN}sel32${EXE}: ${SEL32} ${SIM}
 	${CC} ${SEL32} ${SIM} ${SEL32_OPT} $(CC_OUTSPEC) ${LDFLAGS}
 ##XXXifneq (,$(call find_test,${SEL32D},sel32))
 ##XXX	$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
+##XXXendif
 ##XXXifneq (,$(call find_test,${SEL32D},sel32))
 ##XXX	./$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
 ##XXXendif

@@ -183,7 +183,7 @@ int32 sim_del_char = '\b';                              /* delete character */
 int32 sim_del_char = 0177;
 #endif
 t_bool sim_signaled_int_char                            /* WRU character detected by signal while running */
-#if defined (_WIN32) || defined (_VMS) || defined (__CYGWIN__)
+#if defined (_WIN32) || defined (_VMS) || defined (__CYGWIN__) || (defined(USE_SIM_VIDEO) && defined(HAVE_LIBSDL))
                              = FALSE;
 #else
                              = TRUE;
@@ -750,7 +750,6 @@ static CTAB allowed_remote_cmds[] = {
     { "REPEAT",   &x_repeat_cmd,      0 },
     { "COLLECT",  &x_collect_cmd,     0 },
     { "SAMPLEOUT",&x_sampleout_cmd,   0 },
-    { "STEP",     &x_step_cmd,        0 },
     { "PWD",      &pwd_cmd,           0 },
     { "SAVE",     &save_cmd,          0 },
     { "DIR",      &dir_cmd,           0 },
@@ -772,11 +771,11 @@ static CTAB allowed_master_remote_cmds[] = {
     { "ASSIGN",   &assign_cmd,        0 },
     { "DEASSIGN", &deassign_cmd,      0 },
     { "CONTINUE", &x_continue_cmd,    0 },
+    { "STEP",     &x_step_cmd,        0 },
     { "REPEAT",   &x_repeat_cmd,      0 },
     { "COLLECT",  &x_collect_cmd,     0 },
     { "SAMPLEOUT",&x_sampleout_cmd,   0 },
     { "EXECUTE",  &x_execute_cmd,     0 },
-    { "STEP",     &x_step_cmd,        0 },
     { "PWD",      &pwd_cmd,           0 },
     { "SAVE",     &save_cmd,          0 },
     { "CD",       &set_default_cmd,   0 },
@@ -1406,7 +1405,8 @@ for (i=(was_active_command ? sim_rem_cmd_active_line : 0);
             sim_rem_cmd_active_line = -1;           /* Done with active command */
             if (!sim_rem_active_command) {          /* STEP command? */
                 stat = SCPE_STEP;
-                _sim_rem_message ("STEP", stat);    /* produce a STEP complete message */
+                if (sim_con_stable_registers || !sim_rem_master_mode)
+                    _sim_rem_message ("STEP", stat);/* produce a STEP complete message */
                 }
             _sim_rem_log_out (lp);
             sim_rem_active_command = NULL;          /* Restart loop to process available input */
@@ -1841,8 +1841,14 @@ if (sim_rem_master_was_connected &&                         /* Master mode ever 
     !sim_rem_con_tmxr.ldsc[0].sock)                         /* Master Connection lost? */
     return sim_messagef (SCPE_EXIT, "Master Session Disconnect");/* simulator has been 'unplugged' */
 if (sim_rem_cmd_active_line != -1) {
-    if (steps)
-        sim_activate(uptr, steps);                          /* check again after 'steps' instructions */
+    if (steps) {
+        if (!sim_con_stable_registers && sim_rem_master_mode) {
+            sim_step = steps;
+            sim_sched_step ();
+            }
+        else
+            sim_activate(uptr, steps);                      /* check again after 'steps' instructions */
+        }
     else
         return SCPE_REMOTE;                                 /* force sim_instr() to exit to process command */
     }
@@ -2008,6 +2014,13 @@ sprintf(cmdbuf, "BUFFERED=%d", bufsize);
 return tmxr_open_master (&sim_rem_con_tmxr, cmdbuf);        /* open master socket */
 }
 
+t_bool sim_is_remote_console_master_line (void *lp)
+{
+return sim_rem_master_mode &&                                           /* master mode */
+       (((TMLN *)lp) >= sim_rem_con_tmxr.ldsc) &&                       /* And it is one of the Remote Console Lines */
+       (((TMLN *)lp) < sim_rem_con_tmxr.ldsc + sim_rem_con_tmxr.lines);
+}
+
 /* Enable or disable Remote Console master mode */
 
 /* In master mode, commands are subsequently processed from the
@@ -2059,8 +2072,11 @@ if (sim_rem_master_mode) {
             }
         sim_rem_cmd_active_line = 0;                    /* Make it look like */
         sim_rem_consoles[0].single_mode = FALSE;
+        sim_cancel_step ();
         if (stat != SCPE_STEP)
             sim_rem_active_command = &allowed_single_remote_cmds[0];/* Dummy */
+        else
+            sim_activate_abs (rem_con_data_unit, 0);    /* force step completion processing */
         sim_last_cmd_stat = SCPE_BARE_STATUS(stat);     /* make exit status available to remote console */
         }
     sim_rem_master_was_enabled = FALSE;
@@ -3454,8 +3470,8 @@ if ((sim_ttisatty ()) &&
 if ((std_output) &&                                     /* If Not Background process? */
     (std_output != INVALID_HANDLE_VALUE)) {
     if (GetConsoleMode(std_output, &saved_output_mode))
-        if (!SetConsoleMode(std_output, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT))
-            SetConsoleMode(std_output, ENABLE_PROCESSED_OUTPUT);
+        if (!SetConsoleMode(std_output, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT))
+            SetConsoleMode(std_output, ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
     }
 if (sim_log) {
     fflush (sim_log);
