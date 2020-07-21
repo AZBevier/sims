@@ -1225,7 +1225,7 @@ LDFLAGS := ${OS_LDFLAGS} ${NETWORK_LDFLAGS} ${LDFLAGS_O}
 
 #
 # Common Libraries
-#
+
 ##XXXBIN = BIN/
 BIN = ./
 ##XXXSIMHD = .
@@ -1984,7 +1984,8 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_iop.c ${SEL32D}/sel32_com.c ${SEL32D}/sel32_con.c \
 	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
-	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c
+	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
+	${SEL32D}/sel32_defs.h
 SEL32_OPT = -I $(SEL32D) -DSEL32 
 #SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
 
