@@ -123,11 +123,13 @@
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
 #define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
 #define NUM_DEVS_SCSI   2       /* 2 scsi (MFP SCSI) scsi buss units */
-#define NUM_UNITS_SCSI  2       /* 2 of 4 scsi disk drive devices */
+#define NUM_UNITS_SCSI  2       /* 2 scsi disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
 #define NUM_UNITS_RTOM  1       /* 1 IOP RTOM device (clock & interval timer) */
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */
 #define NUM_UNITS_LPR   1       /* 1 IOP Line printer device */
+#define NUM_DEVS_ETHER  1       /* 1 Ethernet controller */
+#define NUM_UNITS_ETHER 1       /* 1 Ethernet controller */
 
 extern DEVICE cpu_dev;      /* cpu device */
 extern UNIT cpu_unit;       /* the cpu unit */
@@ -180,6 +182,9 @@ extern DEVICE com_dev;
 #endif
 #ifdef NUM_DEVS_LPR
 extern DEVICE lpr_dev;
+#endif
+#ifdef NUM_DEVS_ETHER
+extern DEVICE ec_dev;
 #endif
 
 /* Memory */
@@ -249,6 +254,7 @@ extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
 #endif
 
 /* allow 255 type disks */
+#define UNIT_SUBCHAN       (1 << (UNIT_V_UF_31))
 #define UNIT_V_TYPE        (UNIT_V_UF + 0)
 #define UNIT_TYPE          (0xff << UNIT_V_TYPE)
 /* get & set disk types */
