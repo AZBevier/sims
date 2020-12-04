@@ -1654,9 +1654,9 @@ return SCPE_OK;
         bits_to_clear   TMXR_MDM_DTR and/or TMXR_MDM_RTS as desired
         
    Output:
-        incoming_bits   if non NULL, returns the current stat of DCD, 
-                        RNG, CTS and DSR along with the current state
-                        of DTR and RTS
+        status_bits     if non NULL, returns all of the current signal
+                        state bits (incoming: DCD, RNG, CTS, DSR) along
+                        with the specifically settable bits (DTR, RTS)
 
    Implementation note:
 
@@ -1665,7 +1665,7 @@ return SCPE_OK;
        to a network socket (or could be) then the network session state is
        set, cleared and/or returned.
 */
-t_stat tmxr_set_get_modem_bits (TMLN *lp, int32 bits_to_set, int32 bits_to_clear, int32 *incoming_bits)
+t_stat tmxr_set_get_modem_bits (TMLN *lp, int32 bits_to_set, int32 bits_to_clear, int32 *status_bits)
 {
 int32 before_modem_bits, incoming_state;
 DEVICE *dptr;
@@ -1745,10 +1745,10 @@ if ((lp->modembits != before_modem_bits) && (sim_deb && lp->mp && dptr)) {
     sim_debug_bits (TMXR_DBG_MDM, dptr, tmxr_modem_bits, before_modem_bits, lp->modembits, FALSE);
     sim_debug (TMXR_DBG_MDM, dptr, " - Line %d - %p\n", (int)(lp-lp->mp->ldsc), lp->txb);
     }
-if (incoming_bits)
-    *incoming_bits = (lp->modembits & TMXR_MDM_INCOMING);
+if (status_bits)
+    *status_bits = (lp->modembits & (TMXR_MDM_INCOMING | TMXR_MDM_OUTGOING));
 if (lp->mp && lp->modem_control) {                  /* This API ONLY works on modem_control enabled multiplexer lines */
-    if ((bits_to_set | bits_to_clear) || incoming_bits) {/* Anything to do? */
+    if ((bits_to_set | bits_to_clear) || status_bits) {/* Anything to do? */
         if (lp->loopback) {
             if ((lp->modembits ^ before_modem_bits) & TMXR_MDM_DTR) { /* DTR changed? */
                 lp->ser_connect_pending = (lp->modembits & TMXR_MDM_DTR);
@@ -1757,9 +1757,9 @@ if (lp->mp && lp->modem_control) {                  /* This API ONLY works on mo
             return SCPE_OK;
             }
         if (lp->serport) {
-            t_stat r = sim_control_serial (lp->serport, bits_to_set, bits_to_clear, incoming_bits);
-            if (incoming_bits && (r == SCPE_OK))
-                lp->modembits = (lp->modembits & ~TMXR_MDM_INCOMING) | *incoming_bits;
+            t_stat r = sim_control_serial (lp->serport, bits_to_set, bits_to_clear, status_bits);
+            if (status_bits && (r == SCPE_OK))
+                lp->modembits = (lp->modembits & ~TMXR_MDM_INCOMING) | *status_bits;
             return r;
             }
         if ((lp->sock) || (lp->connecting)) {
@@ -1792,7 +1792,7 @@ if ((lp->sock) || (lp->connecting)) {
         }
     }
 if ((lp->serport) && (!lp->loopback))
-    sim_control_serial (lp->serport, 0, 0, incoming_bits);
+    sim_control_serial (lp->serport, 0, 0, status_bits);
 return SCPE_INCOMP;
 }
 
@@ -2318,7 +2318,8 @@ tmxr_debug_trace_line (lp, "tmxr_putc_ln()");
 if ((lp->xmte == 0) && (TXBUF_AVAIL(lp) > 1) &&
     ((lp->txbps == 0) || (lp->txnexttime <= sim_gtime ())))
     lp->xmte = 1;                                       /* enable line transmit */
-if ((lp->txbfd && !lp->notelnet) || (TXBUF_AVAIL(lp) > 1)) {/* room for char (+ IAC)? */
+if ((lp->conn && (TXBUF_AVAIL(lp) > 1)) ||              /* connected and room for char (+ IAC)? OR */
+    (!lp->conn && !lp->notelnet && lp->txbfd)) {        /* not connected and buffered ? */
     if ((TN_IAC == (u_char) chr) && (!lp->notelnet))    /* char == IAC in telnet session? */
         TXBUF_CHAR (lp, TN_IAC);                        /* stuff extra IAC char */
     TXBUF_CHAR (lp, chr);                               /* buffer char & adv pointer */
@@ -2874,23 +2875,22 @@ while (*tptr) {
             while (cptr && *cptr) {
                 char *tptr = gbuf + (cptr - gbuf);
 
-                get_glyph (cptr, tptr, 0);                  /* upcase this string */
-                if (0 == MATCH_CMD (cptr, "NOTELNET"))
+                cptr = get_glyph (cptr, tptr, ';');
+                if (0 == MATCH_CMD (tptr, "NOTELNET"))
                     listennotelnet = TRUE;
                 else
-                    if (0 == MATCH_CMD (cptr, "TELNET"))
+                    if (0 == MATCH_CMD (tptr, "TELNET"))
                         listennotelnet = FALSE;
                     else
-                        if (0 == MATCH_CMD (cptr, "NOMESSAGE"))
+                        if (0 == MATCH_CMD (tptr, "NOMESSAGE"))
                             listennomessage = TRUE;
                         else
-                            if (0 == MATCH_CMD (cptr, "MESSAGE"))
+                            if (0 == MATCH_CMD (tptr, "MESSAGE"))
                                 listennomessage = FALSE;
                             else {
                                 if (*tptr)
                                     return sim_messagef (SCPE_ARG, "Invalid Specifier: %s\n", tptr);
                                 }
-                cptr = get_glyph (gbuf, port, ';');
                 }
             cptr = init_cptr;
             }
@@ -4276,6 +4276,19 @@ else {
 return SCPE_OK;
 }
 
+t_stat tmxr_flush_log_files (void)
+{
+int i, j;
+
+for (i=0; i<tmxr_open_device_count; ++i) {
+    TMXR *mp = tmxr_open_devices[i];
+
+    for (j=0; j<mp->lines; ++j)
+        if (mp->ldsc[j].txlog)
+            fflush (mp->ldsc[j].txlog);
+    }
+return SCPE_OK;
+}
 
 /* Close a master listening socket.
 
@@ -5633,6 +5646,11 @@ SIM_TEST((sim_parse_addr ("localhost:telnet", host, sizeof(host), "localhost", p
 SIM_TEST((sim_parse_addr ("telnet", host, sizeof(host), "localhost", port, sizeof(port), "1234", NULL) == -1) || (strcmp(host, "localhost")) || (strcmp(port,"telnet")));
 dptr->dctrl = 0xFFFFFFFF;
 dptr->dctrl &= ~TMXR_DBG_TRC;
+sprintf (cmd, "%s -u localhost:65500;telnet;nomessage", dptr->name);
+SIM_TEST(attach_cmd (0, cmd));
+tmxr = (TMXR *)dptr->units->tmxr;
+ln = &tmxr->ldsc[tmxr->lines - 1];
+SIM_TEST(detach_cmd (0, dptr->name));
 sprintf (cmd, "%s -u localhost:65500;notelnet", dptr->name);
 SIM_TEST(attach_cmd (0, cmd));
 tmxr = (TMXR *)dptr->units->tmxr;

@@ -1990,8 +1990,8 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
 	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
 	${SEL32D}/sel32_ec.c ${SEL32D}/sel32_defs.h
-SEL32_OPT = -I $(SEL32D) -DSEL32  $(NETWORK_OPT)
-#SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
+SEL32_OPT = -I $(SEL32D) -DSEL32 $(NETWORK_OPT)
+#SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 $(NETWORK_OPT)
 
 ICL1900D = ${SIMHD}/ICL1900
 ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
