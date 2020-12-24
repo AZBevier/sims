@@ -992,7 +992,9 @@ if (dir) {
 #endif
     t_offset FileSize;
     char *FileName;
-     char *p_name;
+    const char *MatchName = 1 + strrchr (cptr, '/');
+    char *p_name;
+    struct tm *local;
 #if defined (HAVE_GLOB)
     size_t i;
 #endif

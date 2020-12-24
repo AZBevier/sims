@@ -2224,10 +2224,12 @@ t_stat rsctlxio(uint16 lchsa, uint32 *status) {     /* reset controller XIO */
 
         uptr = chp->unitptr;                        /* get the unit ptr */
         unit = uptr - dptr->units;                  /* get the UNIT number */
-        qp = &dibp->ioclq_ptr[unit];                /* IOCLQ pointer */
-        if (qp != NULL) {
-            qp->ioclq_in = 0;                       /* clear any entries */
-            qp->ioclq_out = 0;                      /* clear any entries */
+        if (dibp->ioclq_ptr != NULL) {
+            qp = &dibp->ioclq_ptr[unit];            /* IOCLQ pointer */
+            if (qp != NULL) {
+                qp->ioclq_in = 0;                   /* clear any entries */
+                qp->ioclq_out = 0;                  /* clear any entries */
+            }
         }
 
         /* see if we have a rsctl device entry */

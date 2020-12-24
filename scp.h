@@ -117,8 +117,6 @@ t_stat echo_cmd (int32 flag, CONST char *ptr);
 t_stat echof_cmd (int32 flag, CONST char *ptr);
 t_stat debug_cmd (int32 flag, CONST char *ptr);
 t_stat runlimit_cmd (int32 flag, CONST char *ptr);
-t_stat tar_cmd (int32 flag, CONST char *ptr);
-t_stat curl_cmd (int32 flag, CONST char *ptr);
 t_stat test_lib_cmd (int32 flag, CONST char *ptr);
 
 /* Allow compiler to help validate printf style format arguments */
@@ -341,8 +339,8 @@ void sim_debug_unit (uint32 dbits, UNIT* uptr, const char *fmt, ...) GCC_FMT_ATT
 #else
 void _sim_debug_unit (uint32 dbits, UNIT *uptr, const char* fmt, ...) GCC_FMT_ATTR(3, 4);
 void _sim_debug_device (uint32 dbits, DEVICE* dptr, const char* fmt, ...) GCC_FMT_ATTR(3, 4);
-#define sim_debug(dbits, dptr, ...) do { if ((sim_deb != NULL) && ((dptr) != NULL) && ((dptr)->dctrl & (dbits))) _sim_debug_device (dbits, dptr, __VA_ARGS__);} while (0)
-#define sim_debug_unit(dbits, uptr, ...) do { if ((sim_deb != NULL) && ((uptr) != NULL) && (((uptr)->dctrl | (uptr)->dptr->dctrl) & (dbits))) _sim_debug_unit (dbits, uptr, __VA_ARGS__);} while (0)
+#define sim_debug(dbits, dptr, ...) do { if (sim_deb && dptr && ((dptr)->dctrl & (dbits))) _sim_debug_device (dbits, dptr, __VA_ARGS__);} while (0)
+#define sim_debug_unit(dbits, uptr, ...) do { if (sim_deb && uptr && (((uptr)->dctrl | (uptr)->dptr->dctrl) & (dbits))) _sim_debug_unit (dbits, uptr, __VA_ARGS__);} while (0)
 #endif
 void sim_flush_buffered_files (void);
 

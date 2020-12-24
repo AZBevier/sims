@@ -1671,6 +1671,7 @@ return SCPE_IOERR;
 
 static t_stat rstsLoadAndScanSATT(rstsContext *context, uint16 uaa, uint16 uar, t_offset *result)
 {
+t_offset blocks = 0;
 uint8 bitmap[8192];
 int i, j;
 RSTS_ACNT acnt;
@@ -1912,7 +1913,7 @@ saved_capac = uptr->capac;
 uptr->capac = temp_capac;
 
 for (part = 0; part < RT11_MAXPARTITIONS; part++) {
-    uint16 seg_highest = 0;
+    uint16 seg_highest;
     int type;
 
     base = part << 16;
@@ -2079,8 +2080,7 @@ switch (DK_GET_FMT (uptr)) {                            /* case on format */
 
             /* Construct a pseudo simh disk footer*/
             memcpy (f->Signature, "simh", 4);
-            memset (f->DriveType, 0, sizeof (f->DriveType));
-            strlcpy ((char *)f->DriveType, sim_vhd_disk_get_dtype (uptr->fileref, &f->SectorSize, &f->TransferElementSize, (char *)f->CreatingSimulator, &creation_time), sizeof (f->DriveType));
+            strncpy ((char *)f->DriveType, sim_vhd_disk_get_dtype (uptr->fileref, &f->SectorSize, &f->TransferElementSize, (char *)f->CreatingSimulator, &creation_time), sizeof (f->DriveType) - 1);
             f->SectorSize = NtoHl (f->SectorSize);
             f->TransferElementSize = NtoHl (f->TransferElementSize);
             if ((f->SectorSize == 0) || (NtoHl (f->SectorSize) == 0x00020000)) {  /* Old or mangled format VHD footer */
@@ -2089,8 +2089,7 @@ switch (DK_GET_FMT (uptr)) {                            /* case on format */
                 f->SectorSize = NtoHl (f->SectorSize);
                 f->TransferElementSize = NtoHl (f->TransferElementSize);
                 }
-            memset (f->CreationTime, 0, sizeof (f->CreationTime));
-            strlcpy ((char*)f->CreationTime, ctime (&creation_time), sizeof (f->CreationTime));
+            strncpy ((char*)f->CreationTime, ctime (&creation_time), sizeof (f->CreationTime) - 1);
             container_size = sim_vhd_disk_size (uptr->fileref);
             f->SectorCount = NtoHl ((uint32)(container_size / NtoHl (f->SectorSize)));
             container_size += sizeof (*f);      /* Adjust since it is removed below */
@@ -2147,15 +2146,12 @@ f = (struct simh_disk_footer *)calloc (1, sizeof (*f));
 f->AccessFormat = DK_GET_FMT (uptr);
 total_sectors = (((t_offset)uptr->capac) * ctx->capac_factor * ((dptr->flags & DEV_SECTORS) ? 512 : 1)) / ctx->sector_size;
 memcpy (f->Signature, "simh", 4);
-memset (f->CreatingSimulator, 0, sizeof (f->CreatingSimulator));
-strlcpy ((char *)f->CreatingSimulator, sim_name, sizeof (f->CreatingSimulator));
-memset (f->DriveType, 0, sizeof (f->DriveType));
-strlcpy ((char *)f->DriveType, dtype, sizeof (f->DriveType));
+strncpy ((char *)f->CreatingSimulator, sim_name, sizeof (f->CreatingSimulator) - 1);
+strncpy ((char *)f->DriveType, dtype, sizeof (f->DriveType) - 1);
 f->SectorSize = NtoHl (ctx->sector_size);
 f->SectorCount = NtoHl ((uint32)total_sectors);
 f->TransferElementSize = NtoHl (ctx->xfer_element_size);
-memset (f->CreationTime, 0, sizeof (f->CreationTime));
-strlcpy ((char*)f->CreationTime, ctime (&now), sizeof (f->CreationTime));
+strncpy ((char*)f->CreationTime, ctime (&now), sizeof (f->CreationTime) - 1);
 f->Checksum = NtoHl (eth_crc32 (0, f, sizeof (*f) - sizeof (f->Checksum)));
 free (ctx->footer);
 ctx->footer = f;
@@ -2532,7 +2528,7 @@ if ((DK_GET_FMT (uptr) == DKUF_F_VHD) || (ctx->footer)) {
     if (ctx->footer) {
         sector_size = NtoHl (ctx->footer->SectorSize);
         xfer_element_size = NtoHl (ctx->footer->TransferElementSize);
-        strlcpy (created_name, (char *)ctx->footer->CreatingSimulator, sizeof (created_name));
+        strncpy (created_name, (char *)ctx->footer->CreatingSimulator, sizeof (created_name));
         }
     if ((DK_GET_FMT (uptr) == DKUF_F_VHD) && created && dtype) {
         sim_vhd_disk_set_dtype (uptr->fileref, dtype, ctx->sector_size, ctx->xfer_element_size);
@@ -4740,9 +4736,7 @@ memset (hVHD->Footer.DriveType, '\0', sizeof hVHD->Footer.DriveType);
 memcpy (hVHD->Footer.DriveType, dtype, ((1+strlen (dtype)) < sizeof (hVHD->Footer.DriveType)) ? (1+strlen (dtype)) : sizeof (hVHD->Footer.DriveType));
 hVHD->Footer.DriveSectorSize = NtoHl (SectorSize);
 hVHD->Footer.DriveTransferElementSize = NtoHl (xfer_element_size);
-hVHD->Footer.CreatingSimulator[sizeof (hVHD->Footer.CreatingSimulator) - 1] = '\0';  /* Force NUL termination */
-memset (hVHD->Footer.CreatingSimulator, 0, sizeof (hVHD->Footer.CreatingSimulator));
-strlcpy ((char *)hVHD->Footer.CreatingSimulator, sim_name, sizeof (hVHD->Footer.CreatingSimulator));
+strncpy ((char *)hVHD->Footer.CreatingSimulator, sim_name, sizeof (hVHD->Footer.CreatingSimulator) - 1);
 hVHD->Footer.Checksum = 0;
 hVHD->Footer.Checksum = NtoHl (CalculateVhdFooterChecksum (&hVHD->Footer, sizeof(hVHD->Footer)));
 
