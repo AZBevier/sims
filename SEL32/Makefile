@@ -34,11 +34,11 @@
 #
 # In the unlikely event that someone wants to build network capable 
 # simulators without networking support, invoking GNU make with 
-# NONETWORK=1 will do the trick.
+# NONETWORK=1 on the command line will do the trick.
 #
-# By default, video support is enabled if the SDL/SDL2 development
+# By default, video support is enabled if the SDL2 development
 # headers and libraries are available.  To force a build without video
-# support, invoke GNU make with NOVIDEO=1.
+# support, invoke GNU make with NOVIDEO=1 on the command line.
 #
 # The default build will build compiler optimized binaries.
 # If debugging is desired, then GNU make can be invoked with
@@ -56,16 +56,18 @@
 # simh project support is provided for simulators that are built with 
 # dependent packages provided with the or by the operating system 
 # distribution OR for platforms where that isn't directly available 
-# (OS X) by packages from specific package management systems (MacPorts 
-# or Homebrew).  Users wanting to build simulators with locally build 
+# (OS X/macOS) by packages from specific package management systems (MacPorts 
+# or Homebrew).  Users wanting to build simulators with locally built 
 # dependent packages or packages provided by an unsupported package 
-# management system can override where this procedure looks for include 
-# files and/or libraries.  Overrides can be specified by define exported 
-# environment variables or GNU make command line arguments which specify 
-# INCLUDES and/or LIBRARIES.  
+# management system may be able to override where this procedure looks 
+# for include files and/or libraries.  Overrides can be specified by define 
+# exported environment variables or GNU make command line arguments which 
+# specify INCLUDES and/or LIBRARIES.  
 # Each of these, if specified, must be the complete list include directories
 # or library directories that should be used with each element separated by 
 # colons. (i.e. INCLUDES=/usr/include/:/usr/local/include/:...)
+# If this doesn't work for you and/or you're interested in using a different 
+# ToolChain, you're free to solve this problem on your own.  Good Luck.
 #
 # Some environments may have the LLVM (clang) compiler installed as
 # an alternate to gcc.  If you want to build with the clang compiler, 
@@ -113,6 +115,10 @@ endif
 ifneq (,$(findstring imlac,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
 endif
+# building the TT2500 needs video support
+ifneq (,$(findstring tt2500,${MAKECMDGOALS}))
+  VIDEO_USEFUL = true
+endif
 # building the PDP6, KA10 or KI10 needs video support
 ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
   VIDEO_USEFUL = true
@@ -121,7 +127,7 @@ endif
 ifneq (,$(or $(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS},$(findstring pdp10-kl,${MAKECMDGOALS}))))
   NETWORK_USEFUL = true
 endif
-# building the SEL32 needs networking support
+# building the SEL32 networking can be used
 ifneq (,$(findstring sel32,${MAKECMDGOALS}))
   NETWORK_USEFUL = true
 endif
@@ -130,7 +136,7 @@ ifneq (,$(findstring pdp7,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
 endif
 # building the pdp11, pdp10, or any vax simulator could use networking support
-ifneq (,$(or $(findstring pdp11,${MAKECMDGOALS}),$(findstring pdp10,${MAKECMDGOALS}),$(findstring vax,${MAKECMDGOALS}),$(findstring 3b2,${MAKECMDGOALS})$(findstring all,${MAKECMDGOALS})))
+ifneq (,$(or $(findstring pdp11,${MAKECMDGOALS}),$(findstring pdp10,${MAKECMDGOALS}),$(findstring vax,${MAKECMDGOALS}),$(findstring infoserver,${MAKECMDGOALS}),$(findstring 3b2,${MAKECMDGOALS})$(findstring all,${MAKECMDGOALS})))
   NETWORK_USEFUL = true
   ifneq (,$(findstring all,${MAKECMDGOALS}))
     BUILD_MULTIPLE = s
@@ -174,6 +180,7 @@ ifneq ($(findstring Windows,${OS}),)
     endif
   endif
 endif
+
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
 find_lib = $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(wildcard $(dir)/lib$(1).${LIBEXT})))))
 find_include = $(abspath $(strip $(firstword $(foreach dir,$(strip ${INCPATH}),$(wildcard $(dir)/$(1).h)))))
@@ -204,6 +211,28 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   ifeq (CYGWIN,$(findstring CYGWIN,$(OSTYPE))) # uname returns CYGWIN_NT-n.n-ver
     OSTYPE = cygwin
     OSNAME = windows-build
+  endif
+  ifeq (Darwin,$(OSTYPE))
+    ifeq (,$(shell which port)$(shell which brew))
+      $(info *** Info *** simh dependent packages on macOS must be provided by either the)
+      $(info *** Info *** MacPorts package system or by the HomeBrew package system.)
+      $(info *** Info *** Neither of these seem to be installed on the local system.)
+      $(info *** Info ***)
+      ifeq (,$(INCLUDES)$(LIBRARIES))
+        $(info *** Info *** Users wanting to build simulators with locally built dependent)
+        $(info *** Info *** packages or packages provided by an unsupported package)
+        $(info *** Info *** management system may be able to override where this procedure)
+        $(info *** Info *** looks for include files and/or libraries.  Overrides can be)
+        $(info *** Info *** specified by defining exported environment variables or GNU make)
+        $(info *** Info *** command line arguments which specify INCLUDES and/or LIBRARIES.)
+        $(info *** Info *** If this works, that's great, if it doesn't you are on your own!)
+      else
+        $(info *** Warning *** Attempting to build on macOS with:)
+        $(info *** Warning *** INCLUDES defined as $(INCLUDES))
+        $(info *** Warning *** and)
+        $(info *** Warning *** LIBRARIES defined as $(LIBRARIES))
+      endif
+    endif
   endif
   ifeq (,$(shell ${GCC} -v /dev/null 2>&1 | grep 'clang'))
     GCC_VERSION = $(shell ${GCC} -v /dev/null 2>&1 | grep 'gcc version' | awk '{ print $$3 }')
@@ -499,6 +528,12 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         ifneq (,$(findstring Haiku,$(OSTYPE)))
           OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
           $(info using libpthread: $(call find_include,pthread))
+        else
+          ifeq (Darwin,$(OSTYPE))
+            OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
+            OS_LDFLAGS += -lpthread
+            $(info using macOS libpthread: $(call find_include,pthread))
+          endif
         endif
       endif
       LIBEXT = $(LIBEXTSAVE)
@@ -547,6 +582,11 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           OS_CCDEFS += -DHAVE_DLOPEN=${LIBEXT}
           OS_LDFLAGS += -ldld
           $(info using libdld: $(call find_lib,dld) $(call find_include,dlfcn))
+        else
+          ifeq (Darwin,$(OSTYPE))
+            OS_CCDEFS += -DHAVE_DLOPEN=dylib
+            $(info using macOS dlopen with .dylib)
+          endif
         endif
       endif
     endif
@@ -610,6 +650,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAYNG = ${DISPLAYD}/ng.c
           DISPLAYIII = ${DISPLAYD}/iii.c
           DISPLAYIMLAC = ${DISPLAYD}/imlac.c
+          DISPLAYTT2500 = ${DISPLAYD}/tt2500.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
           $(info using libSDL2: $(call find_include,SDL2/SDL))
           ifeq (Darwin,$(OSTYPE))
@@ -623,19 +664,29 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
     endif
     ifeq (,$(findstring HAVE_LIBSDL,$(VIDEO_CCDEFS)))
       $(info *** Info ***)
-      $(info *** Info *** The simulator$(BUILD_MULTIPLE) you are building could provide more)
-      $(info *** Info *** functionality if video support were available on your system.)
+      $(info *** Info *** The simulator$(BUILD_MULTIPLE) you are building could provide more functionality)
+      $(info *** Info *** if video support was available on your system.)
+      $(info *** Info *** To gain this functionality:)
       ifeq (Darwin,$(OSTYPE))
-        $(info *** Info *** Install the MacPorts libSDL2 package to provide this)
-        $(info *** Info *** functionality for your OS X system:)
-        $(info *** Info ***       # port install libsdl2 libpng zlib)
+        ifeq (/opt/local/bin/port,$(shell which port))
+          $(info *** Info *** Install the MacPorts libSDL2 package to provide this)
+          $(info *** Info *** functionality for your OS X system:)
+          $(info *** Info ***       # port install libsdl2 libpng zlib)
+        endif
         ifeq (/usr/local/bin/brew,$(shell which brew))
-          $(info *** Info ***)
-          $(info *** Info *** OR)
-          $(info *** Info ***)
+          ifeq (/opt/local/bin/port,$(shell which port))
+            $(info *** Info ***)
+            $(info *** Info *** OR)
+            $(info *** Info ***)
+          endif
           $(info *** Info *** Install the HomeBrew libSDL2 package to provide this)
           $(info *** Info *** functionality for your OS X system:)
           $(info *** Info ***       $$ brew install sdl2 libpng zlib)
+        else
+          ifeq (,$(shell which port))
+            $(info *** Info *** Install MacPorts or HomeBrew and rerun this make for)
+            $(info *** Info *** specific advice)
+          endif
         endif
       else
         ifneq (,$(and $(findstring Linux,$(OSTYPE)),$(call find_exe,apt-get)))
@@ -707,7 +758,12 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           NETWORK_FEATURES = - static networking support using $(OSNAME) provided libpcap components
           $(info using libpcap: $(call find_lib,$(PCAPLIB)) $(call find_include,pcap))
         endif
-        LIBEXT = $(LIBEXTSAVE)        
+        LIBEXT = $(LIBEXTSAVE)
+        ifeq (Darwin,$(OSTYPE)$(findstring USE_,$(NETWORK_CCDEFS)))
+          NETWORK_CCDEFS += -DUSE_SHARED
+          NETWORK_FEATURES = - dynamic networking support using $(OSNAME) provided libpcap components
+          $(info using macOS dynamic libpcap: $(call find_include,pcap))
+        endif
       endif
     else
       # On non-Linux platforms, we'll still try to provide deprecated support for libpcap in /usr/local
@@ -816,16 +872,25 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         $(info *** Info ***)
         $(info *** Info *** To build simulator(s) with extended networking support you)
         ifeq (Darwin,$(OSTYPE))
-          $(info *** Info *** should install the MacPorts vde2 package to provide this)
-          $(info *** Info *** functionality for your OS X system:)
-          $(info *** Info ***       # port install vde2)
+          ifeq (/opt/local/bin/port,$(shell which port))
+            $(info *** Info *** should install the MacPorts vde2 package to provide this)
+            $(info *** Info *** functionality for your OS X system:)
+            $(info *** Info ***       # port install vde2)
+          endif
           ifeq (/usr/local/bin/brew,$(shell which brew))
-            $(info *** Info ***)
-            $(info *** Info *** OR)
-            $(info *** Info ***)
-            $(info *** Info *** Install the HomeBrew vde package to provide this)
+            ifeq (/opt/local/bin/port,$(shell which port))
+              $(info *** Info ***)
+              $(info *** Info *** OR)
+              $(info *** Info ***)
+            endif
+            $(info *** Info *** should install the HomeBrew vde package to provide this)
             $(info *** Info *** functionality for your OS X system:)
             $(info *** Info ***       $$ brew install vde)
+          else
+            ifeq (,$(shell which port))
+              $(info *** Info *** should install MacPorts or HomeBrew and rerun this make for)
+              $(info *** Info *** specific advice)
+            endif
           endif
         else
           ifneq (,$(and $(findstring Linux,$(OSTYPE)),$(call find_exe,apt-get)))
@@ -853,7 +918,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         NETWORK_CCDEFS += -DUSE_NETWORK
       endif
     endif
-    ifeq (bsdtuntap,$(shell if ${TEST} -e /usr/include/net/if_tun.h -o -e /Library/Extensions/tap.kext; then echo bsdtuntap; fi))
+    ifeq (bsdtuntap,$(shell if ${TEST} -e /usr/include/net/if_tun.h -o -e /Library/Extensions/tap.kext -o -e /Applications/Tunnelblick.app/Contents/Resources/tap-notarized.kext; then echo bsdtuntap; fi))
       # Provide support for Tap networking on BSD platforms (including OS X)
       NETWORK_CCDEFS += -DHAVE_TAP_NETWORK -DHAVE_BSDTUNTAP
       NETWORK_LAN_FEATURES += TAP
@@ -879,19 +944,18 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
     NETWORK_OPT = $(NETWORK_CCDEFS)
   endif
   ifneq (binexists,$(shell if ${TEST} -e BIN/buildtools; then echo binexists; fi))
-##XXX    MKDIRBIN = @mkdir -p BIN/buildtools
-    MKDIRBIN = @mkdir -p BIN
+    MKDIRBIN = @mkdir -p BIN/buildtools
   endif
   ifeq (commit-id-exists,$(shell if ${TEST} -e .git-commit-id; then echo commit-id-exists; fi))
     GIT_COMMIT_ID=$(shell grep 'SIM_GIT_COMMIT_ID' .git-commit-id | awk '{ print $$2 }')
     GIT_COMMIT_TIME=$(shell grep 'SIM_GIT_COMMIT_TIME' .git-commit-id | awk '{ print $$2 }')
   else
-##XXX    ifeq (,$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | grep 'Format:'))
     ifeq (,$(shell grep 'define SIM_GIT_COMMIT_ID' ../sim_rev.h | grep 'Format:'))
-##XXX      GIT_COMMIT_ID=$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | awk '{ print $$3 }')
       GIT_COMMIT_ID=$(shell grep 'define SIM_GIT_COMMIT_ID' ../sim_rev.h | awk '{ print $$3 }')
-##XXX      GIT_COMMIT_TIME=$(shell grep 'define SIM_GIT_COMMIT_TIME' sim_rev.h | awk '{ print $$3 }')
       GIT_COMMIT_TIME=$(shell grep 'define SIM_GIT_COMMIT_TIME' ../sim_rev.h | awk '{ print $$3 }')
+##  ifeq (,$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | grep 'Format:'))
+##    GIT_COMMIT_ID=$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | awk '{ print $$3 }')
+##    GIT_COMMIT_TIME=$(shell grep 'define SIM_GIT_COMMIT_TIME' sim_rev.h | awk '{ print $$3 }')
     else
       ifeq (git-submodule,$(if $(shell cd .. ; git rev-parse --git-dir 2>/dev/null),git-submodule))
         GIT_COMMIT_ID=$(shell cd .. ; git submodule status | grep "$(notdir $(realpath .))" | awk '{ print $$1 }')
@@ -1040,8 +1104,8 @@ else
     GIT_COMMIT_ID=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_ID" .git-commit-id)") do echo %%i)
     GIT_COMMIT_TIME=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_TIME" .git-commit-id)") do echo %%i)
   else
-##XXX    ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h | findstr Format))
     ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" ../sim_rev.h | findstr Format))
+##  ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h | findstr Format))
       GIT_COMMIT_ID=$(shell for /F "tokens=3" %%i in ("$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h)") do echo %%i)
       GIT_COMMIT_TIME=$(shell for /F "tokens=3" %%i in ("$(shell findstr /C:"define SIM_GIT_COMMIT_TIME" sim_rev.h)") do echo %%i)
     endif
@@ -1221,18 +1285,18 @@ ifneq ($(DONT_USE_READER_THREAD),)
 endif
 
 CC_OUTSPEC = -o $@
-##XXXCC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
-##XXXCC := ${GCC} ${CC_STD} -Wall -Wsign-conversion -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
+##CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
+##CC := ${GCC} ${CC_STD} -Wall -Wsign-conversion -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
 ##CC := ${GCC} ${CC_STD} -g -Wall -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
-CC := ${GCC} ${CC_STD} -g -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
+  CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
 LDFLAGS := ${OS_LDFLAGS} ${NETWORK_LDFLAGS} ${LDFLAGS_O}
 
 #
 # Common Libraries
-
-##XXXBIN = BIN/
+#
+##BIN = BIN/
 BIN = ./
-##XXXSIMHD = .
+##SIMHD = .
 SIMHD = ..
 SIM = ${SIMHD}/scp.c ${SIMHD}/sim_console.c ${SIMHD}/sim_fio.c \
 	${SIMHD}/sim_timer.c ${SIMHD}/sim_sock.c ${SIMHD}/sim_tmxr.c \
@@ -1952,13 +2016,17 @@ ifneq (,$(BESM6_BUILD))
         $(info *** No SDL ttf support available.  BESM-6 video panel disabled.)
         $(info ***)
         ifeq (Darwin,$(OSTYPE))
-          $(info *** Info *** Install the MacPorts libSDL2-ttf development package to provide this)
-          $(info *** Info *** functionality for your OS X system:)
-          $(info *** Info ***       # port install libsdl2-ttf-dev)
+          ifeq (/opt/local/bin/port,$(shell which port))
+            $(info *** Info *** Install the MacPorts libSDL2-ttf development package to provide this)
+            $(info *** Info *** functionality for your OS X system:)
+            $(info *** Info ***       # port install libsdl2-ttf-dev)
+          endif
           ifeq (/usr/local/bin/brew,$(shell which brew))
-            $(info *** Info ***)
-            $(info *** Info *** OR)
-            $(info *** Info ***)
+            ifeq (/opt/local/bin/port,$(shell which port))
+              $(info *** Info ***)
+              $(info *** Info *** OR)
+              $(info *** Info ***)
+            endif
             $(info *** Info *** Install the HomeBrew sdl2_ttf package to provide this)
             $(info *** Info *** functionality for your OS X system:)
             $(info *** Info ***       $$ brew install sdl2_ttf)
@@ -1982,16 +2050,16 @@ ifneq (,$(BESM6_BUILD))
     endif
 endif
 
-##XXXSEL32D = ${SIMHD}/SEL32
+##SEL32D = ${SIMHD}/SEL32
 SEL32D = ../SEL32
 SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_iop.c ${SEL32D}/sel32_com.c ${SEL32D}/sel32_con.c \
 	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
 	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
-	${SEL32D}/sel32_ec.c ${SEL32D}/sel32_defs.h
-SEL32_OPT = -I $(SEL32D) -DSEL32 $(NETWORK_OPT)
-#SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 $(NETWORK_OPT)
+    ${SEL32D}/sel32_ec.c ${SEL32D}/sel32_defs.h
+SEL32_OPT = -I $(SEL32D) -DSEL32 -DUSE_INT32 ${NETWORK_OPT}
+#SEL32_OPT = -I $(SEL32D) -g -DUSE_INT64 -DSEL32 
 
 ICL1900D = ${SIMHD}/ICL1900
 ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
@@ -2003,11 +2071,10 @@ ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
 ICL1900_OPT = -I $(ICL1900D) -DICL1900 -DUSE_SIM_CARD
 
 IBM360D = ${SIMHD}/IBM360
-IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c \
-	${IBM360D}/ibm360_con.c ${IBM360D}/ibm360_chan.c \
-	${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
-	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c \
-	${IBM360D}/ibm360_dasd.c ${IBM360D}/ibm360_com.c
+IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c \
+	${IBM360D}/ibm360_chan.c ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
+	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
+	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c
 IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
 IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 
@@ -2144,20 +2211,20 @@ PDQ3_OPT = -I ${PDQ3D} -DUSE_SIM_IMD
 #
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
-##XXXALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
-#	vax microvax3900 microvax1 rtvax1000 microvax2 vax730 vax750 vax780 \
-#	vax8200 vax8600 besm6 \
-#	microvax2000 infoserver100 infoserver150vxt microvax3100 microvax3100e \
-#	vaxstation3100m30 vaxstation3100m38 vaxstation3100m76 vaxstation4000m60 \
-#	microvax3100m80 vaxstation4000vlc infoserver1000 \
-#	nova eclipse hp2100 hp3000 i1401 i1620 s3 altair altairz80 gri \
-#	i7094 ibm1130 id16 id32 sds lgp h316 cdc1700 \
-#	swtp6800mp-a swtp6800mp-a2 tx-0 ssem b5500 isys8010 isys8020 \
-#	isys8030 isys8024 imds-210 imds-220 imds-225 imds-230 imds-800 imds-810 \
-#	scelbi 3b2 i701 i704 i7010 i7070 i7080 i7090 \
-#	sigma uc15 pdp10-ka pdp10-ki pdp6
+##ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
+##	vax microvax3900 microvax1 rtvax1000 microvax2 vax730 vax750 vax780 \
+##	vax8200 vax8600 besm6 \
+##	microvax2000 infoserver100 infoserver150vxt microvax3100 microvax3100e \
+##	vaxstation3100m30 vaxstation3100m38 vaxstation3100m76 vaxstation4000m60 \
+##	microvax3100m80 vaxstation4000vlc infoserver1000 \
+##	nova eclipse hp2100 hp3000 i1401 i1620 s3 altair altairz80 gri \
+##	i7094 ibm1130 id16 id32 sds lgp h316 cdc1700 \
+##	swtp6800mp-a swtp6800mp-a2 tx-0 ssem b5500 isys8010 isys8020 \
+##	isys8030 isys8024 imds-210 imds-220 imds-225 imds-230 imds-800 imds-810 \
+##	scelbi 3b2 i701 i704 i7010 i7070 i7080 i7090 \
+##	sigma uc15 pdp10-ka pdp10-ki pdp6
 
-##XXXALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp6 ibm360 ibm360_32 icl1900 sel32
+##ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp6 ibm360 ibm360_32 icl1900 sel32
 ALL = sel32
 
 all : ${ALL}
@@ -2168,9 +2235,9 @@ experimental : ${EXPERIMENTAL}
 
 clean :
 ifeq (${WIN32},)
-##XXX	${RM} -rf ${BIN}
+##	${RM} -rf ${BIN}
 	${RM} ${ALL}
-	rmdir BIN
+	${RM} -rf BIN
 else
 	if exist BIN rmdir /s /q BIN
 endif
@@ -2596,12 +2663,9 @@ sel32: $(BIN)sel32$(EXE)
 ${BIN}sel32${EXE}: ${SEL32} ${SIM}
 	${MKDIRBIN}
 	${CC} ${SEL32} ${SIM} ${SEL32_OPT} $(CC_OUTSPEC) ${LDFLAGS}
-##XXXifneq (,$(call find_test,${SEL32D},sel32))
-##XXX	$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
-##XXXendif
-##XXXifneq (,$(call find_test,${SEL32D},sel32))
-##XXX	./$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
-##XXXendif
+##ifneq (,$(call find_test,${SEL32D},sel32))
+##	$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
+##endif
 
 s3 : ${BIN}s3${EXE}
 
