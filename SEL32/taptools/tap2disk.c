@@ -1,8 +1,7 @@
 /*
- * eomtap.c
+ * tap2disk.c
  *
- * This program scans a metatape file and copies files until EOM is found.
- * The program will make sure 2 eof's and 1 eom are written to the tape.
+ * This program scans a metatape file and copies a file until EOF is found.
  * input - specified filename  
  * output - specified filename
  */
@@ -111,13 +110,21 @@ void putrec(int cnt, char *buf)
     int  ac = cnt;                   /* get actual byte count */
 
 //printf("writing %d chars\n", cnt);
+#if 0
     /* write actual byte count to 32 bit word as header */
     n1 = fwrite((char *)(&hc), (size_t)1, (size_t)4, outfp);
+#endif
     /* write the data mod 2 */
     nw = fwrite((char *)buf, (size_t)1, (size_t)hc, outfp);
+#if 0
     /* write the byte count in 32 bit word as footer */
     n2 = fwrite((char *)(&hc), (size_t)1, (size_t)4, outfp);
+#endif
+#if 0
     if (n1 != 4 || nw != hc || n2 != 4)
+#else
+    if (nw != hc)
+#endif
     {
         fprintf(stderr, "write (%d) failure\n", nw);
         fprintf(stderr, "Operation aborted\n");
