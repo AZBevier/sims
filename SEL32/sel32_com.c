@@ -497,7 +497,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             "coml_startcmd chsa %04x: Cmd WRITE %02x\n", chsa, cmd);
 
         /* see if DSR is set, if not give unit check error */
-        if (((ruptr->SNS & SNS_DSRS) == 0)|| ((ruptr->SNS & SNS_CONN) == 0)) {
+        if (((ruptr->SNS & SNS_DSRS) == 0) || ((ruptr->SNS & SNS_CONN) == 0)) {
 //YY    if ((com_ldsc[unit&7].conn == 0) ||
             ruptr->SNS &= ~SNS_RDY;             /* status is not ready */
             wuptr->SNS &= ~SNS_RDY;             /* status is not ready */
@@ -531,7 +531,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case COM_RDHFC:     /* 0x8E */              /* Read command w/hardware flow control only */
 
         /* see if DSR is set, if not give unit check error */
-        if (((ruptr->SNS & SNS_DSRS) == 0)|| ((ruptr->SNS & SNS_CONN) == 0)) {
+        if (((ruptr->SNS & SNS_DSRS) == 0) || ((ruptr->SNS & SNS_CONN) == 0)) {
 //XX    if (com_ldsc[unit&7].conn == 0) {
             ruptr->SNS &= ~SNS_RDY;             /* status is not ready */
             wuptr->SNS &= ~SNS_RDY;             /* status is not ready */
