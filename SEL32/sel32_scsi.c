@@ -1387,8 +1387,8 @@ int scsi_format(UNIT *uptr) {
     uint32      umap[256] =
                 {
                     /* try to makeup a utx dmap */
-                    0x4e554d50,(cap-1),luaddr-1,0,0,0,0,0xe10,
-                    0,0x5320,0,0x4e60,0x46,luaddr,0,0xd360,
+                    0x4e554d50,(cap-1),(uint32)(luaddr-1),0,0,0,0,0xe10,
+                    0,0x5320,0,0x4e60,0x46,(uint32)luaddr,0,0xd360,
                     0x88,0x186b0,0x13a,0xd100,0x283,0,0,0,
                     0,0x22c2813e,0,0x06020000,0xf4,0,0x431b1c,0,
                 };
