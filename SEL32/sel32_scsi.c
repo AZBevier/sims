@@ -32,7 +32,7 @@
 
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
-#define CHS2STAR(c,h,s)	        (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
+#define CHS2STAR(c,h,s)         (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
 /* convert STAR value to number of sectors */
 #define STAR2SEC(star,spt,spc)  ((star&0xff)+(((star>>8)&0xff)*spt)+((star>>16)*spc))
 /* convert STAR value to number of heads or tracks */
@@ -97,9 +97,9 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 
 /* track label / sector label definations */
 /*
-    short lcyl;	        cylinder
-    char ltkn;			track
-    char lid;			sector id
+    short lcyl;         cylinder
+    char ltkn;          track
+    char lid;           sector id
     char lflg1;         track/sector status flags
         bit 0           good
             1           alternate
@@ -113,12 +113,12 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
     short lspar2;
     short ldef1;
     int ldeallp;        DMAP block number trk0
-    int lumapp;			UMAP block number sec1
+    int lumapp;         UMAP block number sec1
     short ladef3;
     short laltcyl;
     char lalttk;        sectors per track
     char ldscnt;        number of heads
-    char ldatrflg;		device attributes
+    char ldatrflg;      device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u

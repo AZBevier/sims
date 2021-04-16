@@ -14,7 +14,7 @@ test version of MPX 3.4.  It is capable of creating a disk image for the
 O/S from a UTX or MPX SDT tape. The disk image can be booted, initialized,
 and can run many of the UTX and MPX utilities and programs. Ethernet is
 supported on UTX and may be added to MPX in the future.  Eight terminals
-can be used to access MPX or UTX via Telnet port 4747. The sumulator hasr
+can be used to access MPX or UTX via Telnet port 4747. The sumulator has
 support for excess 64 floating point arithmetic and passes the 32/27 and
 32/67 FP diags.
 
@@ -105,5 +105,5 @@ Other MPX verions support:
                disk image of a bootable MPX3.X system.
 
 James C. Bevier
-02/13/2021 
+04/14/2021 
 
