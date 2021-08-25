@@ -294,10 +294,10 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
     else
       NEED_COMMIT_ID = need-commit-id
     endif
-    ifeq (need-commit-id,$(NEED_COMMIT_ID))
-      ifneq (,$(shell git update-index --refresh --))
-        GIT_EXTRA_FILES=+uncommitted-changes
-      endif
+    ifneq (,$(shell git update-index --refresh --))
+      GIT_EXTRA_FILES=+uncommitted-changes
+    endif
+    ifneq (,$(or $(NEED_COMMIT_ID),$(GIT_EXTRA_FILES)))
       isodate=$(shell git log -1 --pretty="%ai"|sed -e 's/ /T/'|sed -e 's/ //')
       $(shell git log -1 --pretty="SIM_GIT_COMMIT_ID %H$(GIT_EXTRA_FILES)%nSIM_GIT_COMMIT_TIME $(isodate)" >.git-commit-id)
     endif
@@ -357,10 +357,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       ifeq (HomeBrew,$(shell if ${TEST} -d /usr/local/Cellar; then echo HomeBrew; fi))
         INCPATH += $(foreach dir,$(wildcard /usr/local/Cellar/*/*),$(dir)/include)
         LIBPATH += $(foreach dir,$(wildcard /usr/local/Cellar/*/*),$(dir)/lib)
-      endif
-      ifeq (libXt,$(shell if ${TEST} -d /usr/X11/lib; then echo libXt; fi))
-        LIBPATH += /usr/X11/lib
-        OS_LDFLAGS += -L/usr/X11/lib
       endif
     else
       ifeq (Linux,$(OSTYPE))
@@ -461,12 +457,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
               OS_LDFLAGS += -L/usr/pkg/lib -R/usr/pkg/lib
               OS_CCDEFS += -I/usr/pkg/include
             endif
-            ifeq (X11R7,$(shell if ${TEST} -d /usr/X11R7/lib; then echo X11R7; fi))
-              LIBPATH += /usr/X11R7/lib
-              INCPATH += /usr/X11R7/include
-              OS_LDFLAGS += -L/usr/X11R7/lib -R/usr/X11R7/lib
-              OS_CCDEFS += -I/usr/X11R7/include
-            endif
             ifeq (/usr/local/lib,$(findstring /usr/local/lib,${LIBPATH}))
               INCPATH += /usr/local/include
               OS_CCDEFS += -I/usr/local/include
@@ -489,6 +479,16 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
             endif
           endif
         endif
+      endif
+    endif
+    ifeq (,$(filter /lib/,$(LIBPATH)))
+      ifeq (existlib,$(shell if $(TEST) -d /lib/; then echo existlib; fi))
+        LIBPATH += /lib/
+      endif
+    endif
+    ifeq (,$(filter /usr/lib/,$(LIBPATH)))
+      ifeq (existusrlib,$(shell if $(TEST) -d /usr/lib/; then echo existusrlib; fi))
+        LIBPATH += /usr/lib/
       endif
     endif
     # Some gcc versions don't support LTO, so only use LTO when the compiler is known to support it
@@ -648,7 +648,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAYVT = ${DISPLAYD}/vt11.c
           DISPLAY340 = ${DISPLAYD}/type340.c
           DISPLAYNG = ${DISPLAYD}/ng.c
-          DISPLAYIII = ${DISPLAYD}/iii.c
           DISPLAYIMLAC = ${DISPLAYD}/imlac.c
           DISPLAYTT2500 = ${DISPLAYD}/tt2500.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
@@ -2103,7 +2102,8 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	${KA10D}/pdp6_dtc.c ${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c \
 	${KA10D}/pdp6_dcs.c ${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c \
 	${PDP10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${KA10D}/kx10_disk.c \
-        ${PDP10D}/ka10_pclk.c ${DISPLAYL} ${DISPLAY340} ${DISPLAYIII}
+	${PDP10D}/ka10_pclk.c ${PDP10D}/ka10_tv.c \
+	${DISPLAYL} ${DISPLAY340}
 KA10_OPT = -DKA=1 -DUSE_INT64 -I ${KA10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KA10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
@@ -2143,8 +2143,8 @@ KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) ${NETWORK_OPT}
 
 KS10D = ${SIMHD}/PDP10
 KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
-	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/ks10_rp.c \
-	${KS10D}/ks10_tu.c
+	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/kx10_rh.c \
+	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c
 KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
 
 ATT3B2D = ${SIMHD}/3B2
