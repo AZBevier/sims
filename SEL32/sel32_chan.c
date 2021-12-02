@@ -1444,7 +1444,7 @@ missing:
             return SCPE_OK;                     /* No CC's all OK  */
         }
     }
-/*TRY*/ WMW(chan_icb+20, 0);                /* post sw addr 0 in ICB+5w & reset CCs */
+//TRY WMW(chan_icb+20, 0);                /* post sw addr 0 in ICB+5w & reset CCs */
     sim_debug(DEBUG_IRQ, &cpu_dev,
         "SIOT chsa %04x Nothing to post FIFO #%1x irq %02x inch %06x chan_icba %06x chan_byte %02x\n",
          chsa, FIFO_Num(chsa), inta, chp->chan_inch_addr, chan_icb, chp->chan_byte);
