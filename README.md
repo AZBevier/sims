@@ -1,186 +1,9 @@
 
-[![Coverity Scan Build Status](https://scan.coverity.com/projects/12020/badge.svg)](https://scan.coverity.com/projects/rcornwell-sims)  
-
-This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, KL10, KS10, SEL32, IBM 360
-and IBM7000 series simulators for SimH.
-
-# Stable released simulators.
-
-# IBM 7000 simulators.
-Latest status for I7000 Cpus: 
-
-## i701
-
-   * Largely untested.  
-
-## i704
-   * SAP works.  
-   * Fortran II works in some cases.
-
-## i7010
-   * PR155 works.
-   * PR108 works.
-   * Most Diags appear to pass without serious error.
-   * Protection mode has some errors left.  
-   * Protection mode does not handle setting H or L to 0.  
-
-## i7070
-   * Will load Diags.
-
-## i7080
-   * Sort of working.   
-   * RWW, ECB untested.  
-   * TLx instructions implimented, untested, see 8SE  
-   * Will boot from card.  
-   * Tape system appear to be working.  
-
-   * 8CU10B errors:  
-	410, 412, 413, 414, 418, 419, 420-427 error becuase
-		storage is not parity checked.   
-	440 divide not producing correct sign on error.  
-
-## i7090
-   * Working with exceptions.  
-
-   * Known bugs:  
-
-      * DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant part of result.  
-      * EAD           +n + -n should be -0 is +0
-      * Not all channel skips working for 9P01C.
-      * HTx	Not sure what problems are, does not quite work.  
-      * DKx	Sometimes fails diagnostics with missing inhibit of interrupt.   
-
-   * CTSS    works.  
-  
-   * IBSYS   works.  
-  
-   * Stand alone assembler works.  
-
-   * Lisp 1.5 works.  
-
-   * Signifigance mode Not tested, Test Code Needed.  
-
-# Burroughs B5500
-
- Emulates a dual CPU B5500 with up to 32K of memory. I can support either DFX disks or
- dual disks up to 20 units. Up to 16 magnetic tapes drives is support. 2 Card readers
- a card punch and a pair of line printers. Will run MCP XIII and XV.
-
-  * Up to either 10 disks with DFX support or 20 disks without.  
-  * Up to 16 magnetic tape drives.  
-  * Dual card reader.  
-  * Dual Line printer.  
-  * Single card punch.
-  * Up to 32 terminal lines.  
-
-# Dec PDP6
-
-The PDP6 simulator is part of the KA/KI simulator. The PDP6 devices can be built into the KA10
-simulator if desired.
-
-The PDP6 runs TOPS 10 4.5 off Dectape.
-
-  Disk  
-  * 270 Disk  
-
-  Tape  
-  * 551 Tape  
-  * 555 Dectape.  
-
-  Paper Tape  
-  * Punch  
-  * Reader  
-
-  Type 630 Terminal mux.  
-
-  Type 340 graphics display.  
-
-# Dec KA10 & KI10 & KL10 & KS10
-
-The KA10 sim has successfully run Tops 10 4.5, 5.03 and 6.03, ITS and WAITS.  
-The KI10 sim has successfully run Tops 10 6.03 with VMSER.  
-The KL10 sim has successfully run Tops 10 6.03-7.03, ITS and Tops 20 V2-V7.  
-The KS10 is still in testing.
-
-   Disk   
-   * RC10 RD10/RM10  
-   * RP10 RP01/RP02/RP03  
-   * RH10/RH20 RP04/RP06/RP07 (RP07 not supported under 6.03).   
-   * RH10/RH20 RS04  
-   * PMP (P. PETIT'S IBM CHANNEL)  
-   * System Concepts DC-10 IBM 2314  
-
-   Tape  
-   * TM10A or B  
-   * RH10/RH20 TM03/TU16  
-   * TD10 Dectape  
-
-   Paper Tape  
-   * Punch  
-   * Reader  
- 
-   * DC10E terminal mux.  
-   * Morton tty Mux for ITS.  
-   * Knight Kludge mux for ITS.  
-   * Terminals on KL10 Front End.  
-
-   * LP10 Line printer.  
-   * LP20 Line printer on KL10 Front End.  
-
-   * IMP networking support for ITS and TENEX.  
-   * NIA20 networking support for KL10.  
-   * CH10 networking support for ITS.  
-
-   * 340 Display Station support.  
-   * III Display support for WAITS.  
-
-   * Optional support for PDP6 devices (standard if WAITS included).  
-
-   The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
-and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
-
-   The KS10 supports RH11/RP and RH11/TM03 drives.
-
-# ICL 1900 simulator.
-
-This is a new simulator. Will pass 1904E/1905E CPU diagnostics (FLIT). Will boot paper
-tape executive E4BM and tape executive E6RM. Still need to add more devices and test
-with Goerge 2 and 3.
-
-  The CPU can be configured for model A, B or C type system. Or models 1901 throgh 1909. 
-Paging is currently not supported. Both standard interface and older non-standard interface
-are supported on most device.
-
-
-# IBM 360 simulator.
-
-Currently will run TOS/360, DOS/360, OS/360. IBM 360/67 support added for MTS early
-versions.  IBM 370 support will currently run VM/370, MVS, TSS.
-Support for the following units:
-
-    DASD (Disk) Up to 4 devices of 8.
-    * 2301, 2302, 2303, 2305, 2311, 2314, 3330, 3340, 3350.
-    
-    Tape, 8 devices.
-    * 2400 (7 track and 9 track).
-
-    Unit record
-    * 2540 Card reader
-    * 2540 Card punch
-    * 1403 Line Priner
-    * 1050 Console
-
-    Communications
-    * 2703 with 16 lines of 1050.
-
 # SEL32 Concept/32 Simulator
 
 This is a working simulator for the SEL Concept/32 line of computers.  The
 current version is for the SEL 32/27, 32/67, 32/87, 32/97, V6, and V9
 computers.  Support for 32/55, and 32/75 computers may be added in the future.
-This simulator is co-authors with James C. Bevier. I did the initial parts
-of the simulator, James took it to a working simulator, I am assisting him
-in maintaining and enhancing the simulator. 
 
 All of the processors except for the 32/77 can run the Gould diags.  MPX 1.X
 support for the 32/77 computers may be added in the future.  The level one
@@ -201,4 +24,56 @@ V6 and V9 processors.  UTX utilizes the basemode instruction set and a
 virtual memory system supported by the V6 & V9 CPUs.  The system needs
 further testing to solidify the SEL32 simulator code in all of the
 supported environmenets.
+
+Available tap tools in taptools directory:
+./taptools   - set of tools to work with .tap formatted tapes.  Also tools
+               to convert between MPX and UNIX file formats.  See README
+               file in the taptools directory and source for descriptions.
+
+Available Level One Diagnostic boot tape in tests directory:
+diag.ini     - command file to start diags. Type "./sel32 tests/diag.ini"
+diag.tap     - bootable level one diagnostic tape w/auto testing.
+               Set cpu type to 32/27, 32/67, 32/87, 32/97, V6 or V9.  All
+               cpu models now run all diagnostics provided on the
+               diagnostic tape.  Running DEXP stand alone causes input
+               to stop after a few characters are entered.  More testing
+               is still required.
+
+               CV.CSL - Firmware control diag.  Disabled in auto testing.
+               CV.CP1 - CPU diag part 1 runs OK.
+               CV.CP2 - CPU diag part 2 runs OK.
+               CV.CP3 - CPU diag part 3 runs OK.
+               CV.EAD - Effective address diag runs OK.
+               CV.BRD - Base register instruction diag runs OK, except 32/27.
+               CV.INT - Interrupt diag runs OK.
+               CV.TRP - Traps diag runs OK.
+               CV.CMD - Cache/Shadow diag.  Disabled in auto testing.
+               CN.MMM - Non virtual memory diag runs OK.
+               VM.MMM - Virtual memory diag for V6 & V9 runs OK.
+               CV.IPT - IPU trap diag.  Disabled in auto testing.
+               CV.CSD - WCS read/write trap diag.  Disabled in auto testing.
+               CV.CON - Operators Console runs all tests for all CPUs.
+               CV.DXP - Diagnostic executive for level 2 diags. OK in batch.
+               67.FPT - Level two floating point diag runs under DXP OK.
+               CV.ITD - Level two interval timer diag runs under DXP OK.
+
+               Set GPR[0] = 0xffffffff before booting from tape to disable the
+               auto test and go to the Diagnostic Overlay Loader (DOL>) prompt.
+               Testing is extremely difficult without any source for the
+               diagnostics.  Updates to follow as tests are corrected.
+
+Other MPX versions support:
+               I have recently received some old MPX 3.X save tapes.  Using these
+               I have been able to hand build a MPX3.6 SDT tape that can be used
+               to install MPX3.6.  Once installed, the system can be used to build
+               a new user SDT tape and install it elsewhere.  Both based and non-
+               based O/S images can be created.  More images for installation will
+               be made available in the future as I work my way through the save
+               tapes. I still do not have a master SDT tape for any of the MPX 1.X
+               or MPX 3.X systems.  I have a 1600/6250 BPI tape drive that can read
+               9 track tapes and convert them to .tap files.  If you have a master
+               SDT, I would be very thankfull.  Please keep looking.
+
+James C. Bevier
+12/31/2021 
 

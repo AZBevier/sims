@@ -182,7 +182,7 @@ ifneq ($(findstring Windows,${OS}),)
 endif
 
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
-find_lib = $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(wildcard $(dir)/lib$(1).${LIBEXT})))))
+find_lib = $(firstword $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(foreach ext,$(strip ${LIBEXT}),$(wildcard $(dir)/lib$(1).$(ext))))))))
 find_include = $(abspath $(strip $(firstword $(foreach dir,$(strip ${INCPATH}),$(wildcard $(dir)/$(1).h)))))
 ifneq (0,$(TESTS))
   find_test = RegisterSanityCheck $(abspath $(wildcard $(1)/tests/$(2)_test.ini)) </dev/null
@@ -354,9 +354,14 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         LIBPATH += /opt/local/lib
         OS_LDFLAGS += -L/opt/local/lib
       endif
-      ifeq (HomeBrew,$(shell if ${TEST} -d /usr/local/Cellar; then echo HomeBrew; fi))
-        INCPATH += $(foreach dir,$(wildcard /usr/local/Cellar/*/*),$(dir)/include)
-        LIBPATH += $(foreach dir,$(wildcard /usr/local/Cellar/*/*),$(dir)/lib)
+      ifeq (HomeBrew,$(or $(shell if ${TEST} -d /usr/local/Cellar; then echo HomeBrew; fi),$(shell if ${TEST} -d /opt/homebrew/Cellar; then echo HomeBrew; fi)))
+        ifeq (local,$(shell if $(TEST) -d /usr/local/Cellar; then echo local; fi))
+          HBPATH = /usr/local
+        else
+          HBPATH = /opt/homebrew
+        endif
+        INCPATH += $(foreach dir,$(wildcard $(HBPATH)/Cellar/*/*),$(realpath $(dir)/include))
+        LIBPATH += $(foreach dir,$(wildcard $(HBPATH)/Cellar/*/*),$(realpath $(dir)/lib))
       endif
     else
       ifeq (Linux,$(OSTYPE))
@@ -377,7 +382,8 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
             LIBPATH := $(sort $(foreach lib,$(shell /sbin/ldconfig -p | grep ' => /' | sed 's/^.* => //'),$(dir $(lib))))
           endif
         endif
-        LIBEXT = so
+        LIBSOEXT = so
+        LIBEXT = $(LIBSOEXT) a
       else
         ifeq (SunOS,$(OSTYPE))
           OSNAME = Solaris
@@ -436,7 +442,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
                   else
                     ifeq (,$(strip $(LPATH)))
                       $(info *** Warning ***)
-                      $(info *** Warning *** The library search path on your $(OSTYPE) platform can't be)
+                      $(info *** Warning *** The library search path on your $(OSTYPE) platform can not be)
                       $(info *** Warning *** determined.  This should be resolved before you can expect)
                       $(info *** Warning *** to have fully working simulators.)
                       $(info *** Warning ***)
@@ -481,6 +487,9 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
     endif
+    ifeq (,$(LIBSOEXT))
+      LIBSOEXT = $(LIBEXT)
+    endif
     ifeq (,$(filter /lib/,$(LIBPATH)))
       ifeq (existlib,$(shell if $(TEST) -d /lib/; then echo existlib; fi))
         LIBPATH += /lib/
@@ -491,6 +500,8 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         LIBPATH += /usr/lib/
       endif
     endif
+    export CPATH = $(subst $() $(),:,$(INCPATH))
+    export LIBRARY_PATH = $(subst $() $(),:,$(LIBPATH))
     # Some gcc versions don't support LTO, so only use LTO when the compiler is known to support it
     ifeq (,$(NO_LTO))
       ifneq (,$(GCC_VERSION))
@@ -570,21 +581,21 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   endif
   ifneq (,$(call find_include,dlfcn))
     ifneq (,$(call find_lib,dl))
-      OS_CCDEFS += -DHAVE_DLOPEN=${LIBEXT}
+      OS_CCDEFS += -DSIM_HAVE_DLOPEN=$(LIBSOEXT)
       OS_LDFLAGS += -ldl
       $(info using libdl: $(call find_lib,dl) $(call find_include,dlfcn))
     else
       ifneq (,$(findstring BSD,$(OSTYPE))$(findstring AIX,$(OSTYPE))$(findstring Haiku,$(OSTYPE)))
-        OS_CCDEFS += -DHAVE_DLOPEN=so
+        OS_CCDEFS += -DSIM_HAVE_DLOPEN=so
         $(info using libdl: $(call find_include,dlfcn))
       else
         ifneq (,$(call find_lib,dld))
-          OS_CCDEFS += -DHAVE_DLOPEN=${LIBEXT}
+          OS_CCDEFS += -DSIM_HAVE_DLOPEN=$(LIBSOEXT)
           OS_LDFLAGS += -ldld
           $(info using libdld: $(call find_lib,dld) $(call find_include,dlfcn))
         else
           ifeq (Darwin,$(OSTYPE))
-            OS_CCDEFS += -DHAVE_DLOPEN=dylib
+            OS_CCDEFS += -DSIM_HAVE_DLOPEN=dylib
             $(info using macOS dlopen with .dylib)
           endif
         endif
@@ -1042,8 +1053,8 @@ else
       $(info ***********************************************************************)
       $(info ***********************************************************************)
       $(info **  This build could produce simulators with video capabilities.     **)
-      $(info **  However, the required files to achieve this can't be found on    **)
-      $(info **  this system.  Download the file:                                 **)
+      $(info **  However, the required files to achieve this can not be found on  **)
+      $(info **  on this system.  Download the file:                              **)
       $(info **  https://github.com/simh/windows-build/archive/windows-build.zip  **)
       $(info **  Extract the windows-build-windows-build folder it contains to    **)
       $(info **  $(abspath ..\)                                                   **)
@@ -2047,7 +2058,7 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
 	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
-        ${SEL32D}/sel32_ec.c
+        ${SEL32D}/sel32_ec.c ${SEL32D}/sel32_defs.h
 SEL32_OPT = -I $(SEL32D) -DSEL32  ${NETWORK_OPT}
 #SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
 
@@ -2064,7 +2075,7 @@ IBM360D = ${SIMHD}/IBM360
 IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c \
 	${IBM360D}/ibm360_chan.c ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
 	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
-	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c
+	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_vma.c
 IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
 IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 
@@ -2144,7 +2155,7 @@ KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) ${NETWORK_OPT}
 KS10D = ${SIMHD}/PDP10
 KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
 	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/kx10_rh.c \
-	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c
+	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c ${KS10D}/ks10_dz.c
 KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
 
 ATT3B2D = ${SIMHD}/3B2
