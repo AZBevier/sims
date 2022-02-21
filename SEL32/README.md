@@ -53,10 +53,9 @@ cpu model features.
 
 --------------------
 
-The rest of the command files are zipped to reduce project storage space.
-The software distribution tape files are also zipped in the tapes
-directory.  All zipped files must be unzipped to be useable.  See the
-MPX manuals at bitsavers.org/pdf/sel/sel32_mpx for using MPX 1X or 3X.
+The software distribution tape files are zipped in the tapes directory.
+All zipped files must be unzipped to be useable.  See the MPX manuals
+at bitsavers.org/pdf/sel/sel32_mpx for using MPX 1X or 3X.
 
 --------------------
 
@@ -194,7 +193,7 @@ Available tap tools in taptools directory:
                file in the taptools directory and source for descriptions.
 
 Available Level One Diagnostic boot tape in tests directory:
-diag.ini     - command file to start diags. Type "./sel32 tests/diag.ini"
+diag.ini     - command file to start diags. Type "../sel32 diag.ini"
 diag.tap     - bootable level one diagnostic tape w/auto testing.
                Set cpu type to 32/27, 32/67, 32/87, 32/97, V6 or V9.  All
                cpu models now run all diagnostics provided on the
@@ -238,5 +237,5 @@ Other MPX versions support:
                SDT, I would be very thankfull.  Please keep looking.
 
 James C. Bevier
-02/16/2022 
+02/19/2022 
 
