@@ -41,17 +41,16 @@ available configurations.
 
 # SEL32 test configuration files in the tests directory:
 
-In the tests directory contains the machine diagnostic command file and
+The tests directory contains the SEL32 machine diagnostic command file and
 bootable tape.  They are used by the simh makefile to test the SEL32
 simulator after it built.  All of the instruction set and operating modes
 are validated by the diagnostic.  There is a pass/failure indication from
 the diagnostic.  The command file sel32_test.ini is used by the makefile.
 The command file diag.ini can be run at any time by the user to rerun the
-diagnostics.  There is also some test code used during initial development
-of the SEL32 simulator.  Also an example of the initial configuration file
-(ICL) used by the diagnostic is provided.  The machine configuration is
-loaded by the diag or the UTX or MPX operating system at boot time.  See
-the MPX manuals at bitsavers.org/pdf/sel/sel32_mpx for using MPX 1X or 3X.
+diagnostics.  There is an example of the initial configuration file (ICL)
+used by the diagnostic.  The machine configuration is loaded by the diag
+or the UTX or MPX operating system at boot time.  See the MPX manuals at
+bitsavers.org/pdf/sel/sel32_mpx for using MPX 1X or 3X.
 
 #sel32_test.ini - diag.tap; type "../sel32_test.ini" or run from makefile.
 Auto run by sel32 makefile to validate build or can be run at any time
@@ -117,5 +116,5 @@ Other MPX versions support:
                thankfull.  Please keep looking.
 
 James C. Bevier
-02/27/2022 
+02/28/2022 
 
