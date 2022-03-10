@@ -100,43 +100,38 @@ ifeq (old,$(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ if (
   $(warning *** Warning *** GNU Make Version $(GMAKE_VERSION) is too old to)
   $(warning *** Warning *** fully process this makefile)
 endif
+SIM_MAJOR=$(shell grep SIM_MAJOR sim_rev.h | awk '{ print $$3 }')
 BUILD_SINGLE := ${MAKECMDGOALS} $(BLANK_SUFFIX)
 BUILD_MULTIPLE_VERB = is
 # building the pdp1, pdp11, tx-0, or any microvax simulator could use video support
-ifneq (,$(or $(findstring XXpdp1XX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS}))),$(findstring pdp11,${MAKECMDGOALS}),$(findstring tx-0,${MAKECMDGOALS}),$(findstring microvax1,${MAKECMDGOALS}),$(findstring microvax2,${MAKECMDGOALS}),$(findstring microvax3900,${MAKECMDGOALS}),$(findstring microvax2000,${MAKECMDGOALS}),$(findstring vaxstation3100,${MAKECMDGOALS}),$(findstring XXvaxXX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS})))))
-  VIDEO_USEFUL = true
-endif
-# building the besm6 needs both video support and fontfile support
-ifneq (,$(findstring besm6,${MAKECMDGOALS}))
-  VIDEO_USEFUL = true
-  BESM6_BUILD = true
-endif
-# building the Imlac needs video support
-ifneq (,$(findstring imlac,${MAKECMDGOALS}))
-  VIDEO_USEFUL = true
-endif
-# building the TT2500 needs video support
-ifneq (,$(findstring tt2500,${MAKECMDGOALS}))
-  VIDEO_USEFUL = true
-endif
-# building the PDP6, KA10 or KI10 needs video support
-ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
-  VIDEO_USEFUL = true
-endif
-# building the KA10, KI10 or KL10 networking can be used.
-ifneq (,$(or $(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS},$(findstring pdp10-kl,${MAKECMDGOALS}))))
-  NETWORK_USEFUL = true
-endif
-# building the SEL32 networking can be ussed
-ifneq (,$(findstring sel32,${MAKECMDGOALS}))
-  NETWORK_USEFUL = true
+ifneq (3,${SIM_MAJOR})
+  ifneq (,$(or $(findstring XXpdp1XX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS}))),$(findstring pdp11,${MAKECMDGOALS}),$(findstring tx-0,${MAKECMDGOALS}),$(findstring microvax1,${MAKECMDGOALS}),$(findstring microvax2,${MAKECMDGOALS}),$(findstring microvax3900,${MAKECMDGOALS}),$(findstring microvax2000,${MAKECMDGOALS}),$(findstring vaxstation3100,${MAKECMDGOALS}),$(findstring XXvaxXX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS})))))
+    VIDEO_USEFUL = true
+  endif
+  # building the besm6 needs both video support and fontfile support
+  ifneq (,$(findstring besm6,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+    BESM6_BUILD = true
+  endif
+  # building the Imlac needs video support
+  ifneq (,$(findstring imlac,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+  endif
+  # building the TT2500 needs video support
+  ifneq (,$(findstring tt2500,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+  endif
+  # building the PDP6, KA10 or KI10 needs video support
+  ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
+    VIDEO_USEFUL = true
+  endif
 endif
 # building the PDP-7 needs video support
 ifneq (,$(findstring pdp7,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
 endif
-# building the pdp11, pdp10, or any vax simulator could use networking support
-ifneq (,$(or $(findstring pdp11,${MAKECMDGOALS}),$(findstring pdp10,${MAKECMDGOALS}),$(findstring vax,${MAKECMDGOALS}),$(findstring infoserver,${MAKECMDGOALS}),$(findstring 3b2,${MAKECMDGOALS})$(findstring all,${MAKECMDGOALS})))
+# building the pdp11, any pdp10, any 3b2, or any vax simulator could use networking support
+ifneq (,$(findstring pdp11,${MAKECMDGOALS})$(findstring pdp10,${MAKECMDGOALS})$(findstring vax,${MAKECMDGOALS})$(findstring infoserver,${MAKECMDGOALS})$(findstring 3b2,${MAKECMDGOALS})$(findstring all,${MAKECMDGOALS}))
   NETWORK_USEFUL = true
   ifneq (,$(findstring all,${MAKECMDGOALS}))
     BUILD_MULTIPLE = s
@@ -184,11 +179,17 @@ endif
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
 find_lib = $(firstword $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(foreach ext,$(strip ${LIBEXT}),$(wildcard $(dir)/lib$(1).$(ext))))))))
 find_include = $(abspath $(strip $(firstword $(foreach dir,$(strip ${INCPATH}),$(wildcard $(dir)/$(1).h)))))
-ifneq (0,$(TESTS))
-  find_test = RegisterSanityCheck $(abspath $(wildcard $(1)/tests/$(2)_test.ini)) </dev/null
-  TESTING_FEATURES = - Per simulator tests will be run
-else
-  TESTING_FEATURES = - Per simulator tests will be skipped
+ifneq (3,${SIM_MAJOR})
+  ifneq (0,$(TESTS))
+    find_test = RegisterSanityCheck $(abspath $(wildcard $(1)/tests/$(2)_test.ini)) </dev/null
+    ifneq (,${TEST_ARG})
+      TESTING_FEATURES = - Per simulator tests will be run with argument: ${TEST_ARG}
+    else
+      TESTING_FEATURES = - Per simulator tests will be run
+    endif
+  else
+    TESTING_FEATURES = - Per simulator tests will be skipped
+  endif
 endif
 ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   ifeq (${GCC},)
@@ -305,7 +306,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   LTO_EXCLUDE_VERSIONS = 
   PCAPLIB = pcap
   ifeq (agcc,$(findstring agcc,${GCC})) # Android target build?
-    OS_CCDEFS = -D_GNU_SOURCE -DSIM_ASYNCH_IO 
+    OS_CCDEFS += -D_GNU_SOURCE -DSIM_ASYNCH_IO 
     OS_LDFLAGS = -lm
   else # Non-Android (or Native Android) Builds
     ifeq (,$(INCLUDES)$(LIBRARIES))
@@ -1293,7 +1294,11 @@ endif
 
 CC_OUTSPEC = -o $@
 CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
+ifneq (,${SIM_VERSION_MODE})
+  CC += -DSIM_VERSION_MODE="${SIM_VERSION_MODE}"
+endif
 LDFLAGS := ${OS_LDFLAGS} ${NETWORK_LDFLAGS} ${LDFLAGS_O}
+
 
 #
 # Common Libraries
@@ -2058,7 +2063,7 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
 	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
-        ${SEL32D}/sel32_ec.c ${SEL32D}/sel32_defs.h
+        ${SEL32D}/sel32_ec.c
 SEL32_OPT = -I $(SEL32D) -DSEL32  ${NETWORK_OPT}
 #SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
 
@@ -2149,13 +2154,15 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 	${KL10D}/kx10_rp.c ${KL10D}/kx10_tu.c ${KL10D}/kx10_rs.c \
 	${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
 	${KL10D}/ka10_ch10.c ${KL10D}/kx10_lp.c ${KL10D}/kl10_nia.c \
-        ${KL10D}/kx10_disk.c ${KL10D}/kl10_dn.c
+    ${KL10D}/kx10_disk.c ${KL10D}/kl10_dn.c
 KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) ${NETWORK_OPT} 
 
 KS10D = ${SIMHD}/PDP10
 KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
 	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/kx10_rh.c \
-	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c ${KS10D}/ks10_dz.c
+	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c ${KS10D}/ks10_dz.c \
+    ${KS10D}/ks10_tcu.c ${KS10D}/ks10_lp.c ${KS10D}/ks10_ch11.c \
+    ${KS10D}/ks10_kmc.c ${KS10D}/ks10_dup.c ${KS10D}/kx10_imp.c
 KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
 
 ATT3B2D = ${SIMHD}/3B2

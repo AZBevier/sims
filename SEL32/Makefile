@@ -100,43 +100,42 @@ ifeq (old,$(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ if (
   $(warning *** Warning *** GNU Make Version $(GMAKE_VERSION) is too old to)
   $(warning *** Warning *** fully process this makefile)
 endif
+SIM_MAJOR=$(shell grep SIM_MAJOR sim_rev.h | awk '{ print $$3 }')
 BUILD_SINGLE := ${MAKECMDGOALS} $(BLANK_SUFFIX)
 BUILD_MULTIPLE_VERB = is
 # building the pdp1, pdp11, tx-0, or any microvax simulator could use video support
-ifneq (,$(or $(findstring XXpdp1XX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS}))),$(findstring pdp11,${MAKECMDGOALS}),$(findstring tx-0,${MAKECMDGOALS}),$(findstring microvax1,${MAKECMDGOALS}),$(findstring microvax2,${MAKECMDGOALS}),$(findstring microvax3900,${MAKECMDGOALS}),$(findstring microvax2000,${MAKECMDGOALS}),$(findstring vaxstation3100,${MAKECMDGOALS}),$(findstring XXvaxXX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS})))))
-  VIDEO_USEFUL = true
+ifneq (3,${SIM_MAJOR})
+  ifneq (,$(or $(findstring XXpdp1XX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS}))),$(findstring pdp11,${MAKECMDGOALS}),$(findstring tx-0,${MAKECMDGOALS}),$(findstring microvax1,${MAKECMDGOALS}),$(findstring microvax2,${MAKECMDGOALS}),$(findstring microvax3900,${MAKECMDGOALS}),$(findstring microvax2000,${MAKECMDGOALS}),$(findstring vaxstation3100,${MAKECMDGOALS}),$(findstring XXvaxXX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS})))))
+    VIDEO_USEFUL = true
+  endif
+  # building the besm6 needs both video support and fontfile support
+  ifneq (,$(findstring besm6,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+    BESM6_BUILD = true
+  endif
+  # building the Imlac needs video support
+  ifneq (,$(findstring imlac,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+  endif
+  # building the TT2500 needs video support
+  ifneq (,$(findstring tt2500,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+  endif
+  # building the PDP6, KA10 or KI10 needs video support
+  ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
+    VIDEO_USEFUL = true
+  endif
 endif
-# building the besm6 needs both video support and fontfile support
-ifneq (,$(findstring besm6,${MAKECMDGOALS}))
-  VIDEO_USEFUL = true
-  BESM6_BUILD = true
-endif
-# building the Imlac needs video support
-ifneq (,$(findstring imlac,${MAKECMDGOALS}))
-  VIDEO_USEFUL = true
-endif
-# building the TT2500 needs video support
-ifneq (,$(findstring tt2500,${MAKECMDGOALS}))
-  VIDEO_USEFUL = true
-endif
-# building the PDP6, KA10 or KI10 needs video support
-ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
-  VIDEO_USEFUL = true
-endif
-# building the KA10, KI10 or KL10 networking can be used.
-ifneq (,$(or $(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS},$(findstring pdp10-kl,${MAKECMDGOALS}))))
-  NETWORK_USEFUL = true
-endif
-# building the SEL32 networking can be used
+## building the SEL32 needs video support
 ifneq (,$(findstring sel32,${MAKECMDGOALS}))
-  NETWORK_USEFUL = true
+  VIDEO_USEFUL = true
 endif
 # building the PDP-7 needs video support
 ifneq (,$(findstring pdp7,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
 endif
-# building the pdp11, pdp10, or any vax simulator could use networking support
-ifneq (,$(or $(findstring pdp11,${MAKECMDGOALS}),$(findstring pdp10,${MAKECMDGOALS}),$(findstring vax,${MAKECMDGOALS}),$(findstring infoserver,${MAKECMDGOALS}),$(findstring 3b2,${MAKECMDGOALS})$(findstring all,${MAKECMDGOALS})))
+# building the pdp11, any pdp10, any 3b2, or any vax simulator could use networking support
+ifneq (,$(findstring pdp11,${MAKECMDGOALS})$(findstring pdp10,${MAKECMDGOALS})$(findstring vax,${MAKECMDGOALS})$(findstring infoserver,${MAKECMDGOALS})$(findstring 3b2,${MAKECMDGOALS})$(findstring all,${MAKECMDGOALS}))
   NETWORK_USEFUL = true
   ifneq (,$(findstring all,${MAKECMDGOALS}))
     BUILD_MULTIPLE = s
@@ -182,13 +181,19 @@ ifneq ($(findstring Windows,${OS}),)
 endif
 
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
-find_lib = $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(wildcard $(dir)/lib$(1).${LIBEXT})))))
+find_lib = $(firstword $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(foreach ext,$(strip ${LIBEXT}),$(wildcard $(dir)/lib$(1).$(ext))))))))
 find_include = $(abspath $(strip $(firstword $(foreach dir,$(strip ${INCPATH}),$(wildcard $(dir)/$(1).h)))))
-ifneq (0,$(TESTS))
-  find_test = RegisterSanityCheck $(abspath $(wildcard $(1)/tests/$(2)_test.ini)) </dev/null
-  TESTING_FEATURES = - Per simulator tests will be run
-else
-  TESTING_FEATURES = - Per simulator tests will be skipped
+ifneq (3,${SIM_MAJOR})
+  ifneq (0,$(TESTS))
+    find_test = RegisterSanityCheck $(abspath $(wildcard $(1)/tests/$(2)_test.ini)) </dev/null
+    ifneq (,${TEST_ARG})
+      TESTING_FEATURES = - Per simulator tests will be run with argument: ${TEST_ARG}
+    else
+      TESTING_FEATURES = - Per simulator tests will be run
+    endif
+  else
+    TESTING_FEATURES = - Per simulator tests will be skipped
+  endif
 endif
 ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   ifeq (${GCC},)
@@ -277,7 +282,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       OS_CCDEFS += -Wno-deprecated
     endif
   endif
-  ifeq (git-repo,$(shell if ${TEST} -d ./.git; then echo git-repo; fi))
+  ifeq (git-repo,$(shell if ${TEST} -e ./.git; then echo git-repo; fi))
     GIT_PATH=$(strip $(shell which git))
     ifeq (,$(GIT_PATH))
       $(error building using a git repository, but git is not available)
@@ -294,10 +299,10 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
     else
       NEED_COMMIT_ID = need-commit-id
     endif
-    ifeq (need-commit-id,$(NEED_COMMIT_ID))
-      ifneq (,$(shell git update-index --refresh --))
-        GIT_EXTRA_FILES=+uncommitted-changes
-      endif
+    ifneq (,$(shell git update-index --refresh --))
+      GIT_EXTRA_FILES=+uncommitted-changes
+    endif
+    ifneq (,$(or $(NEED_COMMIT_ID),$(GIT_EXTRA_FILES)))
       isodate=$(shell git log -1 --pretty="%ai"|sed -e 's/ /T/'|sed -e 's/ //')
       $(shell git log -1 --pretty="SIM_GIT_COMMIT_ID %H$(GIT_EXTRA_FILES)%nSIM_GIT_COMMIT_TIME $(isodate)" >.git-commit-id)
     endif
@@ -305,7 +310,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   LTO_EXCLUDE_VERSIONS = 
   PCAPLIB = pcap
   ifeq (agcc,$(findstring agcc,${GCC})) # Android target build?
-    OS_CCDEFS = -D_GNU_SOURCE -DSIM_ASYNCH_IO 
+    OS_CCDEFS += -D_GNU_SOURCE -DSIM_ASYNCH_IO 
     OS_LDFLAGS = -lm
   else # Non-Android (or Native Android) Builds
     ifeq (,$(INCLUDES)$(LIBRARIES))
@@ -354,13 +359,14 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         LIBPATH += /opt/local/lib
         OS_LDFLAGS += -L/opt/local/lib
       endif
-      ifeq (HomeBrew,$(shell if ${TEST} -d /usr/local/Cellar; then echo HomeBrew; fi))
-        INCPATH += $(foreach dir,$(wildcard /usr/local/Cellar/*/*),$(dir)/include)
-        LIBPATH += $(foreach dir,$(wildcard /usr/local/Cellar/*/*),$(dir)/lib)
-      endif
-      ifeq (libXt,$(shell if ${TEST} -d /usr/X11/lib; then echo libXt; fi))
-        LIBPATH += /usr/X11/lib
-        OS_LDFLAGS += -L/usr/X11/lib
+      ifeq (HomeBrew,$(or $(shell if ${TEST} -d /usr/local/Cellar; then echo HomeBrew; fi),$(shell if ${TEST} -d /opt/homebrew/Cellar; then echo HomeBrew; fi)))
+        ifeq (local,$(shell if $(TEST) -d /usr/local/Cellar; then echo local; fi))
+          HBPATH = /usr/local
+        else
+          HBPATH = /opt/homebrew
+        endif
+        INCPATH += $(foreach dir,$(wildcard $(HBPATH)/Cellar/*/*),$(realpath $(dir)/include))
+        LIBPATH += $(foreach dir,$(wildcard $(HBPATH)/Cellar/*/*),$(realpath $(dir)/lib))
       endif
     else
       ifeq (Linux,$(OSTYPE))
@@ -381,7 +387,8 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
             LIBPATH := $(sort $(foreach lib,$(shell /sbin/ldconfig -p | grep ' => /' | sed 's/^.* => //'),$(dir $(lib))))
           endif
         endif
-        LIBEXT = so
+        LIBSOEXT = so
+        LIBEXT = $(LIBSOEXT) a
       else
         ifeq (SunOS,$(OSTYPE))
           OSNAME = Solaris
@@ -440,7 +447,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
                   else
                     ifeq (,$(strip $(LPATH)))
                       $(info *** Warning ***)
-                      $(info *** Warning *** The library search path on your $(OSTYPE) platform can't be)
+                      $(info *** Warning *** The library search path on your $(OSTYPE) platform can not be)
                       $(info *** Warning *** determined.  This should be resolved before you can expect)
                       $(info *** Warning *** to have fully working simulators.)
                       $(info *** Warning ***)
@@ -460,12 +467,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
               INCPATH += /usr/pkg/include
               OS_LDFLAGS += -L/usr/pkg/lib -R/usr/pkg/lib
               OS_CCDEFS += -I/usr/pkg/include
-            endif
-            ifeq (X11R7,$(shell if ${TEST} -d /usr/X11R7/lib; then echo X11R7; fi))
-              LIBPATH += /usr/X11R7/lib
-              INCPATH += /usr/X11R7/include
-              OS_LDFLAGS += -L/usr/X11R7/lib -R/usr/X11R7/lib
-              OS_CCDEFS += -I/usr/X11R7/include
             endif
             ifeq (/usr/local/lib,$(findstring /usr/local/lib,${LIBPATH}))
               INCPATH += /usr/local/include
@@ -491,6 +492,21 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
     endif
+    ifeq (,$(LIBSOEXT))
+      LIBSOEXT = $(LIBEXT)
+    endif
+    ifeq (,$(filter /lib/,$(LIBPATH)))
+      ifeq (existlib,$(shell if $(TEST) -d /lib/; then echo existlib; fi))
+        LIBPATH += /lib/
+      endif
+    endif
+    ifeq (,$(filter /usr/lib/,$(LIBPATH)))
+      ifeq (existusrlib,$(shell if $(TEST) -d /usr/lib/; then echo existusrlib; fi))
+        LIBPATH += /usr/lib/
+      endif
+    endif
+    export CPATH = $(subst $() $(),:,$(INCPATH))
+    export LIBRARY_PATH = $(subst $() $(),:,$(LIBPATH))
     # Some gcc versions don't support LTO, so only use LTO when the compiler is known to support it
     ifeq (,$(NO_LTO))
       ifneq (,$(GCC_VERSION))
@@ -570,21 +586,21 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   endif
   ifneq (,$(call find_include,dlfcn))
     ifneq (,$(call find_lib,dl))
-      OS_CCDEFS += -DHAVE_DLOPEN=${LIBEXT}
+      OS_CCDEFS += -DSIM_HAVE_DLOPEN=$(LIBSOEXT)
       OS_LDFLAGS += -ldl
       $(info using libdl: $(call find_lib,dl) $(call find_include,dlfcn))
     else
       ifneq (,$(findstring BSD,$(OSTYPE))$(findstring AIX,$(OSTYPE))$(findstring Haiku,$(OSTYPE)))
-        OS_CCDEFS += -DHAVE_DLOPEN=so
+        OS_CCDEFS += -DSIM_HAVE_DLOPEN=so
         $(info using libdl: $(call find_include,dlfcn))
       else
         ifneq (,$(call find_lib,dld))
-          OS_CCDEFS += -DHAVE_DLOPEN=${LIBEXT}
+          OS_CCDEFS += -DSIM_HAVE_DLOPEN=$(LIBSOEXT)
           OS_LDFLAGS += -ldld
           $(info using libdld: $(call find_lib,dld) $(call find_include,dlfcn))
         else
           ifeq (Darwin,$(OSTYPE))
-            OS_CCDEFS += -DHAVE_DLOPEN=dylib
+            OS_CCDEFS += -DSIM_HAVE_DLOPEN=dylib
             $(info using macOS dlopen with .dylib)
           endif
         endif
@@ -648,7 +664,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAYVT = ${DISPLAYD}/vt11.c
           DISPLAY340 = ${DISPLAYD}/type340.c
           DISPLAYNG = ${DISPLAYD}/ng.c
-          DISPLAYIII = ${DISPLAYD}/iii.c
           DISPLAYIMLAC = ${DISPLAYD}/imlac.c
           DISPLAYTT2500 = ${DISPLAYD}/tt2500.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
@@ -950,15 +965,15 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
     GIT_COMMIT_ID=$(shell grep 'SIM_GIT_COMMIT_ID' .git-commit-id | awk '{ print $$2 }')
     GIT_COMMIT_TIME=$(shell grep 'SIM_GIT_COMMIT_TIME' .git-commit-id | awk '{ print $$2 }')
   else
+##    ifeq (,$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | grep 'Format:'))
+##      GIT_COMMIT_ID=$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | awk '{ print $$3 }')
+##      GIT_COMMIT_TIME=$(shell grep 'define SIM_GIT_COMMIT_TIME' sim_rev.h | awk '{ print $$3 }')
     ifeq (,$(shell grep 'define SIM_GIT_COMMIT_ID' ../sim_rev.h | grep 'Format:'))
       GIT_COMMIT_ID=$(shell grep 'define SIM_GIT_COMMIT_ID' ../sim_rev.h | awk '{ print $$3 }')
       GIT_COMMIT_TIME=$(shell grep 'define SIM_GIT_COMMIT_TIME' ../sim_rev.h | awk '{ print $$3 }')
-##  ifeq (,$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | grep 'Format:'))
-##    GIT_COMMIT_ID=$(shell grep 'define SIM_GIT_COMMIT_ID' sim_rev.h | awk '{ print $$3 }')
-##    GIT_COMMIT_TIME=$(shell grep 'define SIM_GIT_COMMIT_TIME' sim_rev.h | awk '{ print $$3 }')
     else
       ifeq (git-submodule,$(if $(shell cd .. ; git rev-parse --git-dir 2>/dev/null),git-submodule))
-        GIT_COMMIT_ID=$(shell cd .. ; git submodule status | grep "$(notdir $(realpath .))" | awk '{ print $$1 }')
+        GIT_COMMIT_ID=$(shell cd .. ; git submodule status | grep " $(notdir $(realpath .)) " | awk '{ print $$1 }')
         GIT_COMMIT_TIME=$(shell git --git-dir=$(realpath .)/.git log $(GIT_COMMIT_ID) -1 --pretty="%aI")
       else
         $(info *** Error ***)
@@ -1046,8 +1061,8 @@ else
       $(info ***********************************************************************)
       $(info ***********************************************************************)
       $(info **  This build could produce simulators with video capabilities.     **)
-      $(info **  However, the required files to achieve this can't be found on    **)
-      $(info **  this system.  Download the file:                                 **)
+      $(info **  However, the required files to achieve this can not be found on  **)
+      $(info **  on this system.  Download the file:                              **)
       $(info **  https://github.com/simh/windows-build/archive/windows-build.zip  **)
       $(info **  Extract the windows-build-windows-build folder it contains to    **)
       $(info **  $(abspath ..\)                                                   **)
@@ -1104,8 +1119,8 @@ else
     GIT_COMMIT_ID=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_ID" .git-commit-id)") do echo %%i)
     GIT_COMMIT_TIME=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_TIME" .git-commit-id)") do echo %%i)
   else
+##    ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h | findstr Format))
     ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" ../sim_rev.h | findstr Format))
-##  ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h | findstr Format))
       GIT_COMMIT_ID=$(shell for /F "tokens=3" %%i in ("$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h)") do echo %%i)
       GIT_COMMIT_TIME=$(shell for /F "tokens=3" %%i in ("$(shell findstr /C:"define SIM_GIT_COMMIT_TIME" sim_rev.h)") do echo %%i)
     endif
@@ -1200,6 +1215,7 @@ else
     ifeq (Darwin,$(OSTYPE))
       CFLAGS_O += -O4 -flto -fwhole-program
     else
+#     CFLAGS_O := -O2 -fprofile-arcs -ftest-coverage
       CFLAGS_O := -O2
     endif
   endif
@@ -1286,10 +1302,13 @@ endif
 
 CC_OUTSPEC = -o $@
 ##CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
-##CC := ${GCC} ${CC_STD} -Wall -Wsign-conversion -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
+CC := ${GCC} ${CC_STD} -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
 ##CC := ${GCC} ${CC_STD} -g -Wall -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
-  CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
+ifneq (,${SIM_VERSION_MODE})
+  CC += -DSIM_VERSION_MODE="${SIM_VERSION_MODE}"
+endif
 LDFLAGS := ${OS_LDFLAGS} ${NETWORK_LDFLAGS} ${LDFLAGS_O}
+
 
 #
 # Common Libraries
@@ -2057,9 +2076,9 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
 	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
-    ${SEL32D}/sel32_ec.c ${SEL32D}/sel32_defs.h
+	${SEL32D}/sel32_ec.c ${SEL32D}/sel32_defs.h
 SEL32_OPT = -I $(SEL32D) -DSEL32 -DUSE_INT32 ${NETWORK_OPT}
-#SEL32_OPT = -I $(SEL32D) -g -DUSE_INT64 -DSEL32 
+#SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
 
 ICL1900D = ${SIMHD}/ICL1900
 ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
@@ -2074,7 +2093,7 @@ IBM360D = ${SIMHD}/IBM360
 IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c \
 	${IBM360D}/ibm360_chan.c ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
 	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
-	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c
+	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_vma.c
 IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
 IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 
@@ -2112,7 +2131,8 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	${KA10D}/pdp6_dtc.c ${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c \
 	${KA10D}/pdp6_dcs.c ${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c \
 	${PDP10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${KA10D}/kx10_disk.c \
-        ${PDP10D}/ka10_pclk.c ${DISPLAYL} ${DISPLAY340} ${DISPLAYIII}
+	${PDP10D}/ka10_pclk.c ${PDP10D}/ka10_tv.c \
+	${DISPLAYL} ${DISPLAY340}
 KA10_OPT = -DKA=1 -DUSE_INT64 -I ${KA10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KA10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
@@ -2147,8 +2167,16 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 	${KL10D}/kx10_rp.c ${KL10D}/kx10_tu.c ${KL10D}/kx10_rs.c \
 	${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
 	${KL10D}/ka10_ch10.c ${KL10D}/kx10_lp.c ${KL10D}/kl10_nia.c \
-        ${KL10D}/kx10_disk.c
-KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
+    ${KL10D}/kx10_disk.c ${KL10D}/kl10_dn.c
+KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) ${NETWORK_OPT} 
+
+KS10D = ${SIMHD}/PDP10
+KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
+	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/kx10_rh.c \
+	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c ${KS10D}/ks10_dz.c \
+    ${KS10D}/ks10_tcu.c ${KS10D}/ks10_lp.c ${KS10D}/ks10_ch11.c \
+    ${KS10D}/ks10_kmc.c ${KS10D}/ks10_dup.c ${KS10D}/kx10_imp.c
+KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
 
 ATT3B2D = ${SIMHD}/3B2
 ATT3B2 = ${ATT3B2D}/3b2_cpu.c ${ATT3B2D}/3b2_mmu.c \
@@ -2224,7 +2252,7 @@ PDQ3_OPT = -I ${PDQ3D} -DUSE_SIM_IMD
 ##	scelbi 3b2 i701 i704 i7010 i7070 i7080 i7090 \
 ##	sigma uc15 pdp10-ka pdp10-ki pdp6
 
-##ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp6 ibm360 ibm360_32 icl1900 sel32
+##ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp10-ks pdp6 ibm360 ibm360_32 icl1900 sel32
 ALL = sel32
 
 all : ${ALL}
@@ -3068,6 +3096,15 @@ ${BIN}pdp10-kl${EXE} : ${KL10} ${SIM}
 	${CC} ${KL10} ${SIM} ${KL10_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${PDP10D},kl10))
 	$@ $(call find_test,${PDP10D},kl10) ${TEST_ARG}
+endif
+
+pdp10-ks : ${BIN}pdp10-ks${EXE}
+
+${BIN}pdp10-ks${EXE} : ${KS10} ${SIM}
+	${MKDIRBIN}
+	${CC} ${KS10} ${SIM} ${KS10_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP10D},ks10))
+	$@ $(call find_test,${PDP10D},ks10) ${TEST_ARG}
 endif
 
 # Front Panel API Demo/Test program

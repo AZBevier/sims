@@ -221,7 +221,7 @@ volmcopy - This program reads a MPX 3.X volmgr save tape.  The tape
            file MUST be a volmgr save tape and not a MPX 1.X SDT/save
            tape.
 
-           command: fmgrcopy file.tap >stdout
+           command: volmcopy file.tap >stdout
            input -  file.tap file to dump
            output - stdout filelist and sizes
            output - directory/files extracted to current directory

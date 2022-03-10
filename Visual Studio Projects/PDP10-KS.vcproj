@@ -194,11 +194,31 @@
 			Filter="cpp;c;cxx;def;odl;idl;hpj;bat;asm"
 			>
 			<File
+				RelativePath="..\PDP10\ks10_ch11.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\ks10_cty.c"
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ks10_dup.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\ks10_dz.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ks10_kmc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ks10_lp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ks10_tcu.c"
 				>
 			</File>
 			<File
@@ -214,6 +234,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\kx10_imp.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\kx10_rh.c"
 				>
 			</File>
@@ -222,11 +246,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\kx10_tu.c"
+				RelativePath="..\PDP10\kx10_sys.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\kx10_sys.c"
+				RelativePath="..\PDP10\kx10_tu.c"
 				>
 			</File>
 			<File
@@ -475,6 +499,14 @@
 			</File>
 			<File
 				RelativePath="..\PDP10\kx10_disk.h"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ks10_dup.h"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\pdp11_ddcmp.h"
 				>
 			</File>
 			<File
