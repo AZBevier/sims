@@ -509,6 +509,11 @@ main_argc = argc;
 main_argv = argv;
 
 SDL_SetHint (SDL_HINT_RENDER_DRIVER, "software");
+#if defined (SDL_HINT_VIDEO_ALLOW_SCREENSAVER)
+/* If this hint is defined, the default is to disable the screen saver.
+    We want to leave the screen saver enabled. */
+SDL_SetHint (SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
+#endif
 
 status = SDL_Init (SDL_INIT_VIDEO);
 
@@ -704,6 +709,7 @@ vptr->vid_height = height;
 vptr->vid_mouse_captured = FALSE;
 vptr->vid_cursor_visible = (vptr->vid_flags & SIM_VID_INPUTCAPTURED);
 vptr->vid_blending = FALSE;
+vptr->vid_ready = FALSE;
 
 if (!vid_active) {
     vid_key_events.head = 0;
@@ -2050,12 +2056,14 @@ while (vid_active) {
                         event.user.code = 0;    /* Mark as done */
                         continue;
                         }
-                    vptr = vid_get_event_window (&event, event.user.windowID);
-                    if (vptr == NULL) {
-                        sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "vid_thread() - Ignored event not bound to a window\n");
-                        event.user.code = 0;    /* Mark as done */
-                        break;
+                    if (event.user.code != EVENT_OPEN) {
+                        vptr = vid_get_event_window (&event, event.user.windowID);
+                        if (vptr == NULL) {
+                            sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "vid_thread() - Ignored event not bound to a window\n");
+                            event.user.code = 0;    /* Mark as done */
+                            break;
                         }
+                    }
                     if (event.user.code == EVENT_REDRAW) {
                         vid_update (vptr);
                         event.user.code = 0;    /* Mark as done */
@@ -2067,6 +2075,7 @@ while (vid_active) {
                                 event.user.code = 0;    /* Mark as done */
                                 continue;
                                 }
+                            vptr = vid_get_event_window (&event, event.user.windowID);
                             break;
                             }
                         }
@@ -2138,6 +2147,11 @@ VID_DISPLAY *vptr = (VID_DISPLAY *)arg;
 int stat;
 
 SDL_SetHint (SDL_HINT_RENDER_DRIVER, "software");
+#if defined (SDL_HINT_VIDEO_ALLOW_SCREENSAVER)
+/* If this hint is defined, the default is to disable the screen saver.
+    We want to leave the screen saver enabled. */
+SDL_SetHint (SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
+#endif
 
 stat = SDL_Init (SDL_INIT_VIDEO);
 

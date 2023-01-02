@@ -1,6 +1,6 @@
 /*************************************************************************
  *                                                                       *
- * Copyright (c) 2007-2020 Howard M. Harte.                              *
+ * Copyright (c) 2007-2022 Howard M. Harte.                              *
  * https://github.com/hharte                                             *
  *                                                                       *
  * Permission is hereby granted, free of charge, to any person obtaining *
@@ -16,22 +16,21 @@
  *                                                                       *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       *
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    *
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND                 *
- * NONINFRINGEMENT. IN NO EVENT SHALL HOWARD M. HARTE BE LIABLE FOR ANY  *
- * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  *
- * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     *
- * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                *
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-            *
+ * INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE   *
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN       *
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN     *
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE      *
+ * SOFTWARE.                                                             *
  *                                                                       *
- * Except as contained in this notice, the name of Howard M. Harte shall *
+ * Except as contained in this notice, the names of The Authors shall    *
  * not be used in advertising or otherwise to promote the sale, use or   *
  * other dealings in this Software without prior written authorization   *
- * Howard M. Harte.                                                      *
- *                                                                       *
- * SIMH Interface based on altairz80_hdsk.c, by Peter Schorn.            *
+ * from the Authors.                                                     *
  *                                                                       *
  * Module Description:                                                   *
- *     ImageDisk (IMD) Disk Image File access module for SIMH.           *
- *     see: http://www.classiccmp.org/dunfield/img/index.htm             *
+ *     ImageDisk Disk Image File access module for SIMH, definitions.    *
+ *     See: http://dunfield.classiccmp.org/img/index.htm                 *
  *     for details on the ImageDisk format and other utilities.          *
  *                                                                       *
  *************************************************************************/
@@ -119,7 +118,7 @@ static t_stat diskParse(DISK_INFO *myDisk, uint32 isVerbose)
     uint8 sectorHeadMap[256];
     uint8 sectorCylMap[256];
     uint32 sectorSize, sectorHeadwithFlags, sectRecordType;
-    uint32 i;
+    uint32 hdrBytes, i;
     uint8 start_sect;
 
     uint32 TotalSectorCount = 0;
@@ -150,7 +149,16 @@ static t_stat diskParse(DISK_INFO *myDisk, uint32 isVerbose)
     do {
         sim_debug(myDisk->debugmask, myDisk->device, "start of track %d at file offset %ld\n", myDisk->ntracks, ftell(myDisk->file));
 
-        sim_fread(&imd, 1, 5, myDisk->file);
+        hdrBytes = sim_fread(&imd, 1, 5, myDisk->file);
+  
+        if ((hdrBytes == 0) && feof(myDisk->file))
+            break; /* detected end of IMD file */
+
+        if (hdrBytes != 5) {
+            sim_printf("SIM_IMD: Header read returned %d bytes instead of 5.\n", hdrBytes);
+            return (SCPE_OPENERR);
+        }
+
         if (feof(myDisk->file))
             break;
         sectorSize = 128 << (imd.sectsize & 0x1f);
@@ -167,6 +175,18 @@ static t_stat diskParse(DISK_INFO *myDisk, uint32 isVerbose)
 
         if((imd.head + 1) > myDisk->nsides) {
             myDisk->nsides = imd.head + 1;
+        }
+
+        if (imd.head >= MAX_HEAD) {
+            sim_printf("SIM_IMD: Invalid head %d, a maximum of %d heads are supported.\n",
+                imd.head, MAX_HEAD);
+            return (SCPE_IERR);
+        }
+
+        if (imd.cyl >= MAX_CYL) {
+            sim_printf("SIM_IMD: Invalid cylinder %d, a maximum of %d cylinders are supported.\n",
+                imd.cyl, MAX_CYL);
+            return (SCPE_IERR);
         }
 
         myDisk->track[imd.cyl][imd.head].mode = imd.mode;

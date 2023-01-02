@@ -1,6 +1,6 @@
 /* scp.c: simulator control program
 
-   Copyright (c) 1993-2016, Robert M Supnik
+   Copyright (c) 1993-2022, Robert M Supnik
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -23,6 +23,10 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Robert M Supnik.
 
+   21-Oct-21    RMS     Fixed bug in byte deposits if aincr > 1
+   16-Feb-21    JDB     Rewrote get_rval, put_rval to support arrays of structures
+   25-Jan-21    JDB     REG "size" field now determines access size
+                        REG "maxval" field now determines maximum allowed value
    08-Mar-16    RMS     Added shutdown flag for detach_all
    20-Mar-12    MP      Fixes to "SHOW <x> SHOW" commands
    06-Jan-12    JDB     Fixed "SHOW DEVICE" with only one enabled unit (Dave Bryan)  
@@ -238,8 +242,8 @@
 #endif
 #include <setjmp.h>
 
-#if defined(SIM_HAVE_DLOPEN)                                /* Dynamic Readline support */
-#include <dlfcn.h>
+#if defined(HAVE_EDITLINE)              /* Editline command line editing */
+#include <editline/readline.h>
 #endif
 
 #ifndef MAX
@@ -248,6 +252,9 @@
 #ifndef MIN
 #define MIN(a,b)  (((a) <= (b)) ? (a) : (b))
 #endif
+/* Max width of a value expressed as a formatted string */
+#define MAX_WIDTH ((int) ((CHAR_BIT * sizeof (t_value) * 4 + 3)/3))
+
 
 /* search logical and boolean ops */
 
@@ -547,7 +554,7 @@ t_stat ex_reg (FILE *ofile, t_value val, int32 flag, REG *rptr, uint32 idx);
 t_stat dep_reg (int32 flag, CONST char *cptr, REG *rptr, uint32 idx);
 t_stat exdep_addr_loop (FILE *ofile, SCHTAB *schptr, int32 flag, const char *cptr,
     t_addr low, t_addr high, DEVICE *dptr, UNIT *uptr);
-t_stat ex_addr (FILE *ofile, int32 flag, t_addr addr, DEVICE *dptr, UNIT *uptr);
+t_stat ex_addr (FILE *ofile, int32 flag, t_addr addr, DEVICE *dptr, UNIT *uptr, int32 dfltinc);
 t_stat dep_addr (int32 flag, const char *cptr, t_addr addr, DEVICE *dptr,
     UNIT *uptr, int32 dfltinc);
 void fprint_fields (FILE *stream, t_value before, t_value after, BITFIELD* bitdefs);
@@ -1683,8 +1690,8 @@ static const char simh_help2[] =
       " %%CTIME%%, %%DATE_YYYY%%, %%DATE_YY%%, %%DATE_YC%%, %%DATE_MM%%, %%DATE_MMM%%,\n"
       " %%DATE_MONTH%%, %%DATE_DD%%, %%DATE_D%%, %%DATE_WYYYY%%, %%DATE_WW%%,\n"
       " %%TIME_HH%%, %%TIME_MM%%, %%TIME_SS%%, %%TIME_MSEC%%, %%STATUS%%, %%TSTATUS%%,\n"
-      " %%SIM_VERIFY%%, %%SIM_QUIET%%, %%SIM_MESSAGE%% %%SIM_MESSAGE%%\n"
-      " %%SIM_NAME%%, %%SIM_BIN_NAME%%, %%SIM_BIN_PATH%%m %%SIM_OSTYPE%%\n\n"
+      " %%SIM_VERIFY%%, %%SIM_QUIET%%, %%SIM_MESSAGE%%, %%SIM_NAME%%, %%SIM_BIN_NAME%%,\n"
+      " %%SIM_BIN_PATH%%, %%SIM_OSTYPE%%\n\n"
       "+Token %%0 expands to the command file name.\n"
       "+Token %%n (n being a single digit) expands to the n'th argument\n"
       "+Token %%* expands to the whole set of arguments (%%1 ... %%9)\n\n"
@@ -1927,10 +1934,20 @@ static const char simh_help2[] =
       " the ON command.\n"
       "4Enabling Error Traps\n"
       " Error trapping is enabled with:\n\n"
-      "++set on                   enable error traps\n"
+      "++set on                   enable error traps\n\n"
       "4Disabling Error Traps\n"
       " Error trapping is disabled with:\n\n"
-      "++set noon                 disable error traps\n"
+      "++set noon                 disable error traps\n\n"
+      " Disables error traps for the currently running command file.\n\n"
+      "4Inheritance of Error Traps\n"
+      " Error traps can be local the current command file or inherited into\n"
+      " nested command file invocations:\n\n"
+      "++set on INHERIT|NOINHERIT enable/disable inheritance\n\n"
+      " By default, ON state is NOINHERIT which means that the scope of pending ON\n"
+      " actions is bound to the currently executing command file.  If INHERIT is\n"
+      " enabled, the currently defined ON actions are inherited by nested command\n"
+      " files that may be invoked.\n\n"
+      "4ON\n"
       "4ON\n"
       " To set the action(s) to take when a specific error status is returned by\n"
       " a command in the currently running do command file:\n\n"
@@ -4691,7 +4708,11 @@ if (!ap) {                              /* no environment variable found? */
         ap = rbuf;
         }
     else if (!strcmp ("TSTATUS", gbuf)) {
-        sprintf (rbuf, "%s", sim_error_text (sim_last_cmd_stat));
+        t_stat stat = SCPE_BARE_STATUS(sim_last_cmd_stat);
+        if ((stat > SCPE_OK) && (stat < SCPE_BASE) && (sim_stop_messages[stat] != NULL))
+            sprintf (rbuf, "%s", sim_stop_messages[stat]);
+        else
+            sprintf (rbuf, "%s", sim_error_text (stat));
         ap = rbuf;
         }
     else if (!strcmp ("SIM_VERIFY", gbuf)) {
@@ -6469,11 +6490,11 @@ return SCPE_OK;
 
 const char *sprint_capac (DEVICE *dptr, UNIT *uptr)
 {
-static char capac_buf[((CHAR_BIT * sizeof (t_value) * 4 + 3)/3) + 12];
-t_addr kval = (uptr->flags & UNIT_BINK)? 1024: 1000;
-t_addr mval;
+static char capac_buf[MAX_WIDTH + 12];
+t_offset kval = (uptr->flags & UNIT_BINK)? 1024: 1000;
+t_offset mval;
 double remfrac;
-t_addr psize = uptr->capac;
+t_offset psize = (t_offset)uptr->capac;
 const char *scale, *width;
 
 if (sim_switches & SWMASK ('B'))
@@ -7285,7 +7306,7 @@ gbuf[sizeof(gbuf)-1] = '\0';
 strlcpy (gbuf, cptr, sizeof(gbuf));
 sim_trim_endspc(gbuf);
 if (sim_chdir(gbuf) != 0)
-    return sim_messagef(SCPE_IOERR, "Unable to directory change to: %s\n", gbuf);
+    return sim_messagef(SCPE_IOERR, "Unable to change directory to: %s\n", gbuf);
 return SCPE_OK;
 }
 
@@ -8706,7 +8727,7 @@ void *mbuf = NULL;
 int32 j, blkcnt, limit, unitno, time, flg;
 uint32 us, depth;
 t_addr k, high, old_capac;
-t_value val, mask;
+t_value val, max;
 t_stat r;
 size_t sz;
 t_bool v40, v35, v32;
@@ -8975,10 +8996,13 @@ for ( ;; ) {                                            /* device loop */
             if (depth > rptr->depth)
                 depth = rptr->depth;
             }
-        mask = width_mask[rptr->width];                 /* get mask */
+        if (rptr->maxval > 0)                           /* if a maximum value is defined */
+            max = rptr->maxval;                         /*   then use it */
+        else                                            /* otherwise */
+            max = width_mask[rptr->width];              /*   the mask defines the maximum value */
         for (us = 0; us < depth; us++) {                /* loop thru values */
             READ_I (val);                               /* read value */
-            if (val > mask) {                           /* value ok? */
+            if (val > max) {                            /* value ok? */
                 sim_printf ("Invalid register value: %s %s\n", sim_dname (dptr), buf);
                 }
             else {
@@ -9129,7 +9153,9 @@ if ((flag == RU_RUN) || (flag == RU_GO)) {              /* run or go */
             else
                 new_pcv = strtotv (gbuf, &tptr, sim_PC->radix);/* parse PC */
             if ((tptr == gbuf) || (*tptr != 0) ||       /* error? */
-                (new_pcv > width_mask[sim_PC->width]))
+                (new_pcv > ((sim_PC->maxval > 0)
+                            ? sim_PC->maxval
+                            : (width_mask[sim_PC->width]))))
                 return SCPE_ARG;
             new_pc = TRUE;
             }
@@ -9423,7 +9449,7 @@ t_value pcval;
 
 fputc ('\n', st);                                       /* start on a new line */
 
-if (v >= SCPE_BASE)                                     /* SCP error? */
+if (v == SCPE_OK || v >= SCPE_BASE)                                     /* SCP error? */
     fputs (sim_error_text (v), st);                     /* print it from the SCP list */
 else {                                                  /* VM error */
     if (sim_stop_messages [v])
@@ -9728,7 +9754,7 @@ t_stat exdep_addr_loop (FILE *ofile, SCHTAB *schptr, int32 flag, const char *cpt
     t_addr low, t_addr high, DEVICE *dptr, UNIT *uptr)
 {
 t_addr i, mask;
-t_stat reason;
+t_stat reason, dfltinc;
 int32 saved_switches = sim_switches;
 
 if (uptr->flags & UNIT_DIS)                             /* disabled? */
@@ -9736,22 +9762,25 @@ if (uptr->flags & UNIT_DIS)                             /* disabled? */
 mask = (t_addr) width_mask[dptr->awidth];
 if ((low > mask) || (high > mask) || (low > high))
     return SCPE_ARG;
+dfltinc =  parse_sym ("0", 0, uptr, sim_eval, sim_switches);
+if (dfltinc > 0)                                        /* parse_sym doing nums? */
+    dfltinc = 1 - dptr->aincr;                          /* no, use std dflt incr */
 for (i = low; i <= high; ) {                            /* all paths must incr!! */
     reason = get_aval (i, dptr, uptr);                  /* get data */
     sim_switches = saved_switches;
     if (reason != SCPE_OK)                              /* return if error */
         return reason;
     if (schptr && !test_search (sim_eval, schptr))
-        i = i + dptr->aincr;                            /* sch fails, incr */
+        i = i + (1 - dfltinc);                          /* sch fails, incr */
     else {                                              /* no sch or success */
         if (flag != EX_D) {                             /* ex, ie, or id? */
-            reason = ex_addr (ofile, flag, i, dptr, uptr);
+            reason = ex_addr (ofile, flag, i, dptr, uptr, dfltinc);
             sim_switches = saved_switches;
             if (reason > SCPE_OK)
                 return reason;
             }
         else
-            reason = 1 - dptr->aincr;                   /* no, dflt incr */
+            reason = dfltinc;                           /* no, dflt incr */
         if (flag != EX_E) {                             /* ie, id, or d? */
             reason = dep_addr (flag, cptr, i, dptr, uptr, reason);
             sim_switches = saved_switches;
@@ -9815,53 +9844,50 @@ return SCPE_OK;
         idx     =       index
    Outputs:
         return  =       register value
+
+   Implementation notes:
+
+    1. The stride is the size of the element spacing for arrays, which is
+       equivalent to the addressing increment for array subscripting.  For
+       scalar registers, the stride will be zero (as will the idx value), so the
+       access pointer is same as the specified location pointer.
+
+    2. The size of the t_value type is determined by the USE_INT64 symbol and
+       will be either a 32-bit or a 64-bit type.  It represents the largest
+       value that can be returned and so is the default if one of the smaller
+       sizes is not indicated.  If USE_INT64 is not defined, t_value will be
+       identical to uint32.  In this case, compilers are generally smart enough
+       to eliminate the 32-bit size test and combine the two assignments into a
+       single default assignment.
 */
 
 t_value get_rval (REG *rptr, uint32 idx)
 {
-size_t sz;
 t_value val;
-uint32 *ptr;
+void    *ptr;
 
-sz = SZ_R (rptr);
-if ((rptr->depth > 1) && (rptr->flags & REG_CIRC)) {
-    idx = idx + rptr->qptr;
-    if (idx >= rptr->depth) idx = idx - rptr->depth;
+if ((rptr->depth > 1) && (rptr->flags & REG_CIRC)) {    /* if the register is a circular queue */
+    idx = idx + rptr->qptr;                             /*   then adjust the index relative to the queue */
+    if (idx >= rptr->depth)                             /* if the index is beyond the end of the array */
+        idx = idx - rptr->depth;                        /*   then wrap it around */
     }
-if ((rptr->depth > 1) && (rptr->flags & REG_UNIT)) {
-    ptr = (uint32 *)(((UNIT *) rptr->loc) + idx);
-#if defined (USE_INT64)
-    if (sz <= sizeof (uint32))
-        val = *ptr;
-    else val = *((t_uint64 *) ptr);
-#else
-    val = *ptr;
-#endif
-    }
-else if ((rptr->depth > 1) && (rptr->flags & REG_STRUCT)) {
-    ptr = (uint32 *)(((size_t) rptr->loc) + (idx * rptr->str_size));
-#if defined (USE_INT64)
-    if (sz <= sizeof (uint32))
-        val = *ptr;
-    else val = *((t_uint64 *) ptr);
-#else
-    val = *ptr;
-#endif
-    }
-else if (((rptr->depth > 1) || (rptr->flags & REG_FIT)) &&
-    (sz == sizeof (uint8)))
-    val = *(((uint8 *) rptr->loc) + idx);
-else if (((rptr->depth > 1) || (rptr->flags & REG_FIT)) &&
-    (sz == sizeof (uint16)))
-    val = *(((uint16 *) rptr->loc) + idx);
-#if defined (USE_INT64)
-else if (sz <= sizeof (uint32))
-     val = *(((uint32 *) rptr->loc) + idx);
-else val = *(((t_uint64 *) rptr->loc) + idx);
-#else
-else val = *(((uint32 *) rptr->loc) + idx);
-#endif
-val = (val >> rptr->offset) & width_mask[rptr->width];
+
+ptr = ((char *) rptr->loc) + (idx * rptr->stride);      /* point at the starting byte of the item */
+
+if (rptr->size == sizeof (uint8))                       /* get the value */
+    val = *((uint8 *) ptr);                             /*   using a size */
+                                                        /*     appropriate to */
+else if (rptr->size == sizeof (uint16))                 /*       the size of */
+    val = *((uint16 *) ptr);                            /*         the underlying type */
+
+else if (rptr->size == sizeof (uint32))
+    val = *((uint32 *) ptr);
+
+else                                                    /* if the element size is non-standard */
+    val = *((t_value *) ptr);                           /*   then access using the largest size permitted */
+
+val = (val >> rptr->offset) & width_mask[rptr->width];  /* shift and mask to obtain the final value */
+
 return val;
 }
 
@@ -9879,7 +9905,7 @@ return val;
 t_stat dep_reg (int32 flag, CONST char *cptr, REG *rptr, uint32 idx)
 {
 t_stat r;
-t_value val, mask;
+t_value val, max;
 int32 rdx;
 CONST char *tptr;
 char gbuf[CBUFSIZE];
@@ -9891,24 +9917,27 @@ if (rptr->flags & REG_RO)
 if (flag & EX_I) {
     cptr = read_line (gbuf, sizeof(gbuf), stdin);
     if (sim_log)
-        fprintf (sim_log, "%s\n", cptr? cptr: "");
+        fprintf (sim_log, "%s\n", cptr? cptr: "");      /* fix clang error */
     if (cptr == NULL)                                   /* force exit */
         return 1;
     if (*cptr == 0)                                     /* success */
         return SCPE_OK;
     }
-mask = width_mask[rptr->width];
+if (rptr->maxval > 0)                                   /* if a maximum value is defined */
+    max = rptr->maxval;                                 /*   then use it */
+else                                                    /* otherwise */
+    max = width_mask[rptr->width];                      /*   the mask defines the maximum value */
 GET_RADIX (rdx, rptr->radix);
 if ((rptr->flags & REG_VMAD) && sim_vm_parse_addr) {    /* address form? */
     val = sim_vm_parse_addr (sim_dflt_dev, cptr, &tptr);
-    if ((tptr == cptr) || (*tptr != 0) || (val > mask))
+    if ((tptr == cptr) || (*tptr != 0) || (val > max))
         return SCPE_ARG;
     }
 else
     if (!(rptr->flags & REG_VMFLAGS) ||                 /* dont use sym? */
         (parse_sym ((CONST char *)cptr, (rptr->flags & REG_UFMASK) | rdx, NULL,
                     &val, sim_switches | SIM_SW_REG) > SCPE_OK)) {
-    val = get_uint (cptr, rdx, mask, &r);
+    val = get_uint (cptr, rdx, max, &r);
     if (r != SCPE_OK)
         return SCPE_ARG;
     }
@@ -9927,76 +9956,59 @@ return SCPE_OK;
         mask    =       mask
    Outputs:
         none
+
+
+   Implementation notes:
+
+    1. mask and val are of type t_value, so an explicit cast is not needed for
+       that type of assignment.
+
+    2. See the notes for the get_rval routine for additional information
+       regarding the stride calculation and the t_value default assignment,
 */
 
 void put_rval_pcchk (REG *rptr, uint32 idx, t_value val, t_bool pc_chk)
 {
-size_t sz;
 t_value mask;
-uint32 *ptr;
+void    *ptr;
 t_value prev_val = 0;
 
 if ((!(sim_switches & SWMASK ('Z'))) && 
     (rptr->flags & REG_DEPOSIT) && sim_vm_reg_update)
     prev_val = get_rval (rptr, idx);
 
-#define PUT_RVAL(sz,rp,id,v,m) \
-    *(((sz *) rp->loc) + id) = \
-            (sz)((*(((sz *) rp->loc) + id) & \
-            ~((m) << (rp)->offset)) | ((v) << (rp)->offset))
+if (pc_chk && (rptr == sim_PC))                         /* if the PC is changing */
+    sim_brk_npc (0);                                    /*   then notify the breakpoint package */
 
-if (pc_chk && (rptr == sim_PC))
-    sim_brk_npc (0);
-sz = SZ_R (rptr);
-mask = width_mask[rptr->width];
-if ((rptr->depth > 1) && (rptr->flags & REG_CIRC)) {
-    idx = idx + rptr->qptr;
-    if (idx >= rptr->depth)
-        idx = idx - rptr->depth;
+mask = ~(width_mask [rptr->width] << rptr->offset);     /* set up a mask to produce a hole in the element */
+val  = val << rptr->offset;                             /*   and position the new value to fit the hole */
+
+if ((rptr->depth > 1) && (rptr->flags & REG_CIRC)) {    /* if the register is a circular queue */
+    idx = idx + rptr->qptr;                             /*   then adjust the index relative to the queue */
+    if (idx >= rptr->depth)                             /* if the index is beyond the end of the array */
+        idx = idx - rptr->depth;                        /*   then wrap it around */
     }
-if ((rptr->depth > 1) && (rptr->flags & REG_UNIT)) {
-    ptr = (uint32 *)(((UNIT *) rptr->loc) + idx);
-#if defined (USE_INT64)
-    if (sz <= sizeof (uint32))
-        *ptr = (*ptr &
-        ~(((uint32) mask) << rptr->offset)) |
-        (((uint32) val) << rptr->offset);
-    else *((t_uint64 *) ptr) = (*((t_uint64 *) ptr)
-        & ~(mask << rptr->offset)) | (val << rptr->offset);
-#else
-    *ptr = (*ptr &
-        ~(((uint32) mask) << rptr->offset)) |
-        (((uint32) val) << rptr->offset);
-#endif
-    }
-else if ((rptr->depth > 1) && (rptr->flags & REG_STRUCT)) {
-    ptr = (uint32 *)(((size_t)rptr->loc) + (idx * rptr->str_size));
-#if defined (USE_INT64)
-    if (sz <= sizeof (uint32))
-        *((uint32 *) ptr) = (*((uint32 *) ptr) &
-        ~(((uint32) mask) << rptr->offset)) |
-        (((uint32) val) << rptr->offset);
-    else *((t_uint64 *) ptr) = (*((t_uint64 *) ptr)
-        & ~(mask << rptr->offset)) | (val << rptr->offset);
-#else
-    *ptr = (*ptr &
-        ~(((uint32) mask) << rptr->offset)) |
-        (((uint32) val) << rptr->offset);
-#endif
-    }
-else if (((rptr->depth > 1) || (rptr->flags & REG_FIT)) &&
-    (sz == sizeof (uint8)))
-    PUT_RVAL (uint8, rptr, idx, (uint32) val, (uint32) mask);
-else if (((rptr->depth > 1) || (rptr->flags & REG_FIT)) &&
-    (sz == sizeof (uint16)))
-    PUT_RVAL (uint16, rptr, idx, (uint32) val, (uint32) mask);
-#if defined (USE_INT64)
-else if (sz <= sizeof (uint32))
-    PUT_RVAL (uint32, rptr, idx, (int32) val, (uint32) mask);
-else PUT_RVAL (t_uint64, rptr, idx, val, mask);
-#else
-else PUT_RVAL (uint32, rptr, idx, val, mask);
-#endif
+
+ptr = ((char *) rptr->loc) + (idx * rptr->stride);      /* point at the starting byte of the item */
+
+if (rptr->size == sizeof (uint8))                       /* store the value */
+    *((uint8 *) ptr) =                                  /*   using a size */
+       (uint8) ((*((uint8 *) ptr) & mask) | val);        /*     appropriate to */
+                                                        /*       the size of */
+else
+    if (rptr->size == sizeof (uint16))                  /*         the underlying type */
+        *((uint16 *) ptr) =
+          (uint16) ((*((uint16 *) ptr) & mask) | val);
+
+    else 
+        if (rptr->size == sizeof (uint32))
+            *((uint32 *) ptr) =
+              (uint32) ((*((uint32 *) ptr) & mask) | val);
+
+        else                                            /* if the element size is non-standard */
+            *((t_value *) ptr) =                        /*   then access using the largest size permitted */
+              (*((t_value *) ptr) & mask) | val;
+
 if ((!(sim_switches & SWMASK ('Z'))) && 
     (rptr->flags & REG_DEPOSIT) && sim_vm_reg_update)
     sim_vm_reg_update (rptr, idx, prev_val, val);
@@ -10016,12 +10028,13 @@ put_rval_pcchk (rptr, idx, val, TRUE);
         addr    =       address to examine
         dptr    =       pointer to device
         uptr    =       pointer to unit
+        dfltinc =       default increment
    Outputs:
         return  =       if > 0, error status
                         if <= 0,-number of extra addr units retired
 */
 
-t_stat ex_addr (FILE *ofile, int32 flag, t_addr addr, DEVICE *dptr, UNIT *uptr)
+t_stat ex_addr (FILE *ofile, int32 flag, t_addr addr, DEVICE *dptr, UNIT *uptr, int32 dfltinc)
 {
 t_stat reason;
 int32 rdx;
@@ -10031,12 +10044,12 @@ if (sim_vm_fprint_addr)
 else fprint_val (ofile, addr, dptr->aradix, dptr->awidth, PV_LEFT);
 fprintf (ofile, ":\t");
 if (!(flag & EX_E))
-    return (1 - dptr->aincr);
+    return dfltinc;
 
 GET_RADIX (rdx, dptr->dradix);
 if ((reason = fprint_sym (ofile, addr, sim_eval, uptr, sim_switches)) > 0) {
     fprint_val (ofile, sim_eval[0], rdx, dptr->dwidth, PV_RZRO);
-    reason = 1 - dptr->aincr;
+    reason = dfltinc;
     }
 if (flag & EX_I)
     fprintf (ofile, "\t");
@@ -10274,51 +10287,16 @@ return read_line_p (NULL, cptr, size, stream);
 char *read_line_p (const char *prompt, char *cptr, int32 size, FILE *stream)
 {
 char *tptr;
-#if defined(SIM_HAVE_DLOPEN)
-static int initialized = 0;
-typedef char *(*readline_func)(const char *);
-static readline_func p_readline = NULL;
-typedef void (*add_history_func)(const char *);
-static add_history_func p_add_history = NULL;
-
-if (prompt && (!initialized)) {
-    initialized = 1;
-    void *handle;
-
-#define S__STR_QUOTE(tok) #tok
-#define S__STR(tok) S__STR_QUOTE(tok)
-    handle = dlopen("libncurses." S__STR(SIM_HAVE_DLOPEN), RTLD_NOW|RTLD_GLOBAL);
-    handle = dlopen("libcurses." S__STR(SIM_HAVE_DLOPEN), RTLD_NOW|RTLD_GLOBAL);
-    handle = dlopen("libreadline." S__STR(SIM_HAVE_DLOPEN), RTLD_NOW|RTLD_GLOBAL);
-    if (!handle)
-        handle = dlopen("libreadline." S__STR(SIM_HAVE_DLOPEN) ".8", RTLD_NOW|RTLD_GLOBAL);
-    if (!handle)
-        handle = dlopen("libreadline." S__STR(SIM_HAVE_DLOPEN) ".7", RTLD_NOW|RTLD_GLOBAL);
-    if (!handle)
-        handle = dlopen("libreadline." S__STR(SIM_HAVE_DLOPEN) ".6", RTLD_NOW|RTLD_GLOBAL);
-    if (!handle)
-        handle = dlopen("libreadline." S__STR(SIM_HAVE_DLOPEN) ".5", RTLD_NOW|RTLD_GLOBAL);
-    if (handle) {
-        p_readline = (readline_func)((size_t)dlsym(handle, "readline"));
-        p_add_history = (add_history_func)((size_t)dlsym(handle, "add_history"));
-        }
-    }
+#if defined(HAVE_EDITLINE)
 if (prompt) {                                           /* interactive? */
-    if (p_readline) {
-        char *tmpc = p_readline (prompt);               /* get cmd line */
-        if (tmpc == NULL)                               /* bad result? */
-            cptr = NULL;
-        else {
-            strlcpy (cptr, tmpc, size);                 /* copy result */
-            free (tmpc) ;                               /* free temp */
-            }
-        }
+    char *tmpc = readline (prompt);                     /* get cmd line */
+    if (tmpc == NULL)                                   /* bad result? */
+        cptr = NULL;
     else {
-        printf ("%s", prompt);                          /* display prompt */
-        fflush (stdout);
-        cptr = fgets (cptr, size, stream);              /* get cmd line */
-        }
+        strlcpy (cptr, tmpc, size);                     /* copy result */
+        free (tmpc) ;                                   /* free temp */
     }
+}
 else cptr = fgets (cptr, size, stream);                 /* get cmd line */
 #else
 if (prompt) {                                           /* interactive? */
@@ -10350,9 +10328,9 @@ if ((*cptr == ';') || (*cptr == '#')) {                 /* ignore comment */
     *cptr = 0;
     }
 
-#if defined (SIM_HAVE_DLOPEN)
-if (prompt && p_add_history && *cptr)                   /* Save non blank lines in history */
-    p_add_history (cptr);
+#if defined (HAVE_EDITLINE)
+if (prompt && *cptr)                   /* Save non blank lines in history */
+    add_history (cptr);
 #endif
 
 return cptr;
@@ -11668,7 +11646,6 @@ return val * negate;
 t_stat sprint_val (char *buffer, t_value val, uint32 radix,
     uint32 width, uint32 format)
 {
-#define MAX_WIDTH ((int) ((CHAR_BIT * sizeof (t_value) * 4 + 3)/3))
 t_value owtest, wtest;
 t_bool negative = FALSE;
 int32 d, digit, ndigits, commas = 0;
@@ -11679,8 +11656,7 @@ if (((format == PV_LEFTSIGN) || (format == PV_RCOMMASIGN)) &&
     val = (t_value)(-((t_svalue)val));
     negative = TRUE;
     }
-for (d = 0; d < MAX_WIDTH; d++)
-    dbuf[d] = (format == PV_RZRO)? '0': ' ';
+memset (dbuf, (format == PV_RZRO)? '0': ' ', MAX_WIDTH);
 dbuf[MAX_WIDTH] = 0;
 d = MAX_WIDTH;
 do {
@@ -12848,13 +12824,14 @@ if (spc < SIM_BKPT_N_SPC) {
 const char *sim_brk_message(void)
 {
 static char msg[256];
-char addr[65];
+char addr[MAX_WIDTH + 1];
 char buf[32];
 
 msg[0] = '\0';
 if (sim_vm_sprint_addr)
     sim_vm_sprint_addr (addr, sim_dflt_dev, (t_value)sim_brk_match_addr);
-else sprint_val (addr, (t_value)sim_brk_match_addr, sim_dflt_dev->aradix, sim_dflt_dev->awidth, PV_LEFT);
+else 
+    sprint_val (addr, (t_value)sim_brk_match_addr, sim_dflt_dev->aradix, sim_dflt_dev->awidth, PV_LEFT);
 if (sim_brk_type_desc) {
     BRKTYPTAB *brk = sim_brk_type_desc;
 
@@ -13771,7 +13748,7 @@ static const char *sim_debug_prefix (uint32 dbits, DEVICE* dptr, UNIT* uptr)
 const char* debug_type = _get_dbg_verb (dbits, dptr, uptr);
 char tim_t[32] = "";
 char tim_a[32] = "";
-char pc_s[64] = "";
+char pc_s[MAX_WIDTH + 1] = "";
 struct timespec time_now;
 
 if (sim_deb_switches & (SWMASK ('T') | SWMASK ('R') | SWMASK ('A'))) {
@@ -15859,7 +15836,7 @@ return ((*gptr == '\0') && (*string));
 static t_svalue sim_eval_postfix (Stack *stack1, t_stat *stat)
 {
 Stack *stack2 = new_Stack();    /* local working stack2 which is holds the numbers operators */
-char temp_data[CBUFSIZE];       /* Holds the items popped from the stack2 */
+char temp_data[CBUFSIZE + 2];   /* Holds the items popped from the stack2 */
 Operator *temp_op;
 t_svalue temp_val;
 char temp_string[CBUFSIZE + 2];
@@ -16067,29 +16044,10 @@ for (i = 0; (dptr = devices[i]) != NULL; i++) {
     REG *rptr;
 
     for (rptr = dptr->registers; (rptr != NULL) && (rptr->name != NULL); rptr++) {
-        uint32 bytes = 1;
         uint32 rsz = SZ_R(rptr);
         uint32 memsize = ((rptr->flags & REG_FIT) || (rptr->depth > 1)) ? rptr->depth * rsz : 4;
-        DEVICE *udptr = NULL;
         t_bool Bad;
 
-        while ((bytes << 3) < rptr->offset + rptr->width)
-            bytes <<= 1;
-
-        if (rptr->depth > 1)
-            bytes = rptr->ele_size;
-
-        if (rptr->flags & REG_UNIT) {
-            DEVICE **d;
-
-            for (d = devices; *d != NULL; d++) {
-                if (((UNIT *)rptr->loc >= (*d)->units) &&
-                    ((UNIT *)rptr->loc < (*d)->units + (*d)->numunits)) {
-                    udptr = *d;
-                    break;
-                    }
-                }
-            }
         if (((rptr->width + rptr->offset + CHAR_BIT - 1) / CHAR_BIT) >= sizeof(size_map) / sizeof(size_map[0])) {
             Bad = TRUE;
             rsz = 0;
@@ -16100,10 +16058,10 @@ for (i = 0; (dptr = devices[i]) != NULL; i++) {
             }
 
         if (sim_switches & SWMASK ('R'))            /* Debug output */
-            sim_printf ("%5s:%-9.9s %s(rdx=%u, wd=%u, off=%u, dep=%u, strsz=%u, objsz=%u, elesz=%u, rsz=%u, %s %s%s%s membytes=%u)\n", dptr->name, rptr->name, rptr->macro, 
-                        rptr->radix, rptr->width, rptr->offset, rptr->depth, (uint32)rptr->str_size, (uint32)rptr->obj_size, (uint32)rptr->ele_size, rsz, rptr->desc ? rptr->desc : "",
-                        (rptr->flags & REG_FIT) ? "REG_FIT" : "", (rptr->flags & REG_VMIO) ? " REG_VMIO" : "", (rptr->flags & REG_STRUCT) ? " REG_STRUCT" : "",
-                        memsize);
+            sim_printf ("%5s:%-9.9s %s(rdx=%u, wd=%u, off=%u, dep=%u, strsz=%u, objsz=%u, elesz=%u, rsz=%u, %s %s%s membytes=%u, macro=%s)\n", dptr->name, rptr->name, rptr->macro, 
+                        rptr->radix, rptr->width, rptr->offset, rptr->depth, (uint32)rptr->stride, (uint32)rptr->obj_size, (uint32)rptr->size, rsz, rptr->desc ? rptr->desc : "",
+                        (rptr->flags & REG_FIT) ? "REG_FIT" : "", (rptr->flags & REG_VMIO) ? " REG_VMIO" : "",
+                        memsize, rptr->macro ? rptr->macro : "");
 
         MFlush (f);
         if (rptr->depth == 1) {
@@ -16122,42 +16080,6 @@ for (i = 0; (dptr = devices[i]) != NULL; i++) {
             Bad = TRUE;
             Mprintf (f, "a 0 bit wide register is meaningless\n");
             }
-        if ((rptr->obj_size != 0) && (rptr->ele_size != 0) && (rptr->depth != 0) && (rptr->macro != NULL)) {
-            if (rptr->flags & REG_UNIT) {
-                if (udptr == NULL) {
-                    Bad = TRUE;
-                    Mprintf (f, "\tthe indicated UNIT can't be found for this %u depth array\n", rptr->depth);
-                    }
-                else {
-                    if (rptr->depth > udptr->numunits) {
-                        Bad = TRUE;
-                        Mprintf (f, "\tthe depth of the UNIT array exceeds the number of units on the %s device which is %u\n", dptr->name, udptr->numunits);
-                        }
-                    if (rptr->obj_size > sizeof (t_value)) {
-                        Bad = TRUE;
-                        Mprintf (f, "\t%u is larger than the size of the t_value type (%u)\n", (uint32)rptr->obj_size, (uint32)sizeof (t_value));
-                        }
-                    }
-                }
-            else {
-                bytes *= rptr->depth;
-                if (!Bad) 
-                    if ((rsz * rptr->depth == rptr->obj_size)                                       ||
-                        ((rptr->flags & REG_STRUCT) && (rsz <= rptr->obj_size))                     ||
-                        ((rptr->depth == 1) && 
-                         ((rptr->obj_size == sizeof (t_value)) || (rsz < rptr->obj_size)))          ||
-                        ((rptr->depth != 1) && (bytes == rptr->obj_size))                           ||
-                        ((rptr->depth != 1) && (rptr->offset == 0) && (rptr->width == 8) &&
-                         ((rptr->depth == rptr->obj_size) || (rptr->depth == rptr->obj_size - 1)))  ||
-                        ((rptr->depth != 1) && (rptr->offset == 0) && (rptr->obj_size == rptr->ele_size)))
-                    continue;
-                Bad = TRUE;
-                Mprintf (f, "\ttherefore SAVE/RESTORE operations will affect %u byte%s of memory\n", bytes, (bytes != 1) ? "s" : "");
-                Mprintf (f, "\twhile the variable lives in %u bytes of memory\n", (uint32)rptr->obj_size);
-                }
-            }
-        else
-            Mprintf (f, "\tthis register entry is not properly initialized\n");
         if (Bad) {
             FMwrite (stdout, f);
             stat = SCPE_IERR;

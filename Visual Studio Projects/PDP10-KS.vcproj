@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="9.00"
 	Name="PDP10-KS"
-	ProjectGUID="{E63DFEF3-2372-47CF-8EE4-79DB41A4E440}"
+	ProjectGUID="{7F4EB115-2027-4582-A6EB-6A7DD9BA6F11}"
 	RootNamespace="PDP10-KS"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="131072"
@@ -47,6 +47,7 @@
 				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
+				WarnAsError="true"
 				DebugInformationFormat="3"
 				CompileAs="1"
 				ShowIncludes="false"
@@ -63,7 +64,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/fixed:no"
-				AdditionalDependencies="libcmtd.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestaticd.lib SDL2-StaticD.lib SDL2_ttf-StaticD.lib freetype2412MT_D.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
+				AdditionalDependencies="libcmtd.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestaticd.lib SDL2-StaticD.lib SDL2_ttf-StaticD.lib freetype2412MT_D.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib Setupapi.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="../../windows-build/lib/Debug/"
 				GenerateDebugInformation="true"
@@ -126,12 +127,13 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../PDP10/;../PDP11/;../VAX/;./;../;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/include;;../../windows-build/include/SDL2"
-				PreprocessorDefinitions="USE_INT64;KS=1;USE_DISPLAY;USE_SHARED;HAVE_SLIRP_NETWORK;USE_SIMH_SLIRP_DEBUG;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCRE_H;PCRE_STATIC;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
+				PreprocessorDefinitions="USE_INT64;KS=1;USE_SHARED;HAVE_SLIRP_NETWORK;USE_SIMH_SLIRP_DEBUG;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCRE_H;PCRE_STATIC;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
+				WarnAsError="true"
 				DebugInformationFormat="3"
 				CompileAs="1"
 			/>
@@ -147,7 +149,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/fixed:no"
-				AdditionalDependencies="libcmt.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestatic.lib SDL2-Static.lib SDL2_ttf-Static.lib freetype2412MT.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
+				AdditionalDependencies="libcmt.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestatic.lib SDL2-Static.lib SDL2_ttf-Static.lib freetype2412MT.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib Setupapi.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="../../windows-build/lib/Release/"
 				GenerateDebugInformation="false"
@@ -494,19 +496,15 @@
 			Filter="h;hpp;hxx;hm;inl;inc"
 			>
 			<File
+				RelativePath="..\PDP10\ks10_dup.h"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\kx10_defs.h"
 				>
 			</File>
 			<File
 				RelativePath="..\PDP10\kx10_disk.h"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ks10_dup.h"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\pdp11_ddcmp.h"
 				>
 			</File>
 			<File
