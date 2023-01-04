@@ -34,7 +34,7 @@ int             PeerIndex;
 extern  int     fork();
 extern  int     getpid();
 uint32          *M = 0;                     /* Memory when we have IPU fork */
-struct  ipcom	*IPC = 0;
+struct  ipcom   *IPC = 0;
 #else
 /* running IPU thread on CPU, n/u in IPU fork */
 /* this is different than IPU defines */
@@ -43,9 +43,9 @@ int             MyIndex;
 int             PeerIndex;
 pthread_t       ipuThread;                  /* thread structure */
 uint32          M[MAXMEMSIZE] = { 0 };      /* Memory */
-struct  ipcom	myipc = {0};
-//struct  ipcom	*IPC = &myipc;              /* local structure */
-struct  ipcom	*IPC = 0;
+struct  ipcom   myipc = {0};
+//struct  ipcom *IPC = &myipc;              /* local structure */
+struct  ipcom   *IPC = 0;
 //uint32          *M = 0;                     /* Memory when we have thread IPU */
 //extern  DEVICE  ipu_dev;                    /* IPU device structure */
 uint32          cpustop = 0;                /* to stop reason for IPU */
@@ -53,14 +53,9 @@ uint32          cpustop = 0;                /* to stop reason for IPU */
 #else
 //uint32          *M = 0;                     /* Memory when we have no IPU */
 uint32          M[MAXMEMSIZE] = { 0 };      /* Memory */
-//struct  ipcom	*IPC = 0;
+//struct  ipcom *IPC = 0;
 #endif
 
-#ifdef USE_IPU_THREAD
-//LOCAL   DEVICE* my_dev = &ipu_dev;          /* current DEV pointer CPU or IPU */
-#else
-//LOCAL   DEVICE* my_dev = &cpu_dev;          /* current DEV pointer CPU or IPU */
-#endif
 LOCAL   DEVICE* my_dev = &cpu_dev;          /* current DEV pointer CPU or IPU */
 
 LOCAL   uint32  OIR=0;                      /* Original Instruction register */
@@ -123,7 +118,6 @@ LOCAL   uint32  pfault;                     /* page # of fault from read/write *
 /* bits 8-18 has map reg contents for this page (Map << 13) */
 /* bit 19-31 is zero for page offset of zero */
 
-LOCAL   int32           irq_auto = 0;       /* auto reset interrupt processing flag */
 LOCAL   uint8           wait4int = 0;       /* waiting for interrupt if set */
 #ifndef CPUONLY
 LOCAL   uint8           wait4sipu = 0;      /* waiting for sipu in IPU if set */
@@ -518,139 +512,19 @@ LOCAL int base_mode[] = {
 #define MAX256      256     /* 32/27 and 32/87 map limit */
 #define MAX2048     2048    /* 32/67, V6, and V9 map limit */
 
-#ifndef CPUONLY
-#ifndef USE_IPU_THREAD
-
-#include <signal.h>
-#define SIGDUMP SIGUSR1
-
-/* DumpStatus called when receiving SIGUSR1 */
-static void DumpStatus()
-{
-    int i, j;
-    char ll[120];
-    fprintf(stdout,"@%s: OIR=%08x W4S=%d W4I=%d IRQ=%d IRA=%d OPSD=%08x/%08x C=%08x T=%08x\r\n",
-        (CPUSTATUS & ONIPU) ? "IPU" : "CPU", OIR, wait4sipu, wait4int, irq_pend, irq_auto,
-        OPSD1, OPSD2, CPUSTATUS, TRAPSTATUS);
-    fprintf(stdout,"@%s: IR=%08x W4S=%d W4I=%d IRQ=%d IRA=%d PSD=%08x/%08x C=%08x T=%08x\r\n",
-        (CPUSTATUS & ONIPU) ? "IPU" : "CPU", IR, wait4sipu, wait4int, irq_pend, irq_auto,
-        PSD1, PSD2, CPUSTATUS, TRAPSTATUS);
-    fprintf(stdout, "R0=%.8x R1=%.8x R2=%.8x R3=%.8x\r\n", GPR[0], GPR[1], GPR[2], GPR[3]);
-    fprintf(stdout, "R4=%.8x R5=%.8x R6=%.8x R7=%.8x\r\n", GPR[4], GPR[5], GPR[6], GPR[7]);
-    fprintf(stdout,"      SPAD[f0]=%x SPAD[f7]=%08x [f1]=%08x [f2]=%08x [f3]=%08x\r\n",
-        SPAD[0xf0], SPAD[0xf7], SPAD[0xf1], SPAD[0xf2], SPAD[0xf3]);
-    /* dump acticve SPAD entries */
-    for (i=0, j=0; i <0xf0; i++) {
-        if (SPAD[i] == 0 || SPAD[i] == 0xffffffff)
-            continue;
-        sprintf(&ll[j],"[%02x=%08x]", i, SPAD[i]);
-        j += 13;
-        ll[j] = '\0';
-        if (j >= (6 * 13)) {
-            j = 0;
-            fprintf(stdout, "      SPAD  %s\r\n", ll);
-        }
-    }
-    if (j > 0) {
-        fprintf(stdout, "      SPAD  %s\r\n", ll);
-    }
-    fprintf(stdout,"      SPAD[f0-f7] %08x %08x %08x %08x %08x %08x %08x %08x\r\n",
-        SPAD[0xf0], SPAD[0xf1], SPAD[0xf2], SPAD[0xf3], SPAD[0xf4], SPAD[0xf5], SPAD[0xf6], SPAD[0xf7]);
-    fprintf(stdout,"      SPAD[f8-ff] %08x %08x %08x %08x %08x %08x %08x %08x\r\n",
-        SPAD[0xf8], SPAD[0xf9], SPAD[0xfa], SPAD[0xfb], SPAD[0xfc], SPAD[0xfd], SPAD[0xfe], SPAD[0xff]);
-
-    /* dump active interrupt status words */
-    for (i=0, j=0; i <0x80; i++) {
-        if (INTS[i] == 0 || INTS[i] == 0xffffffff)
-            continue;
-        sprintf(&ll[j],"[%02x=%08x]", i, INTS[i]);
-        j += 13;
-        ll[j] = '\0';
-        if (j >= (8 * 13)) {
-            j = 0;
-            fprintf(stdout, "INTS  %s\r\n", ll);
-        }
-    }
-    if (j > 0) {
-        fprintf(stdout, "INTS  %s\r\n", ll);
-    }
-    if (CPUSTATUS & ONIPU)
-        fprintf(stdout,"      M[0x%02x]=%08x [0x%02x]=%08x [0x%02x]=%08x\r\n",
-            0x24, M[0x24 >> 2], 0x48, M[0x48 >> 2], 0x4c, M[0x4c >> 2]);
-    else
-        fprintf(stdout,"      M[0x%02x]=%08x [0x%02x]=%08x [0x%02x]=%08x\r\n",
-            0x84, M[0x84 >> 2], 0xa8, M[0xa8 >> 2], 0xac, M[0xac >> 2]);
-    if (IPC) {
-        if (IPC->atrap[0])
-            fprintf(stdout,"      CPU: Pending Async TRAP: %02x\r\n", IPC->atrap[0]);
-        else
-            fprintf(stdout,"      CPU: No pending Async TRAP\r\n");
-        if (IPC->atrap[1])
-            fprintf(stdout,"      IPU: Pending Async TRAP: %02x\r\n", IPC->atrap[1]);
-        else
-            fprintf(stdout,"      IPU: No pending Async TRAP\r\n");
-        fprintf(stdout,"      atraps snt/blck/drop/rcvd CPU: %d/%d/%d/%d IPU: %d/%d/%d/%d\r\n",
-            IPC->sent[0], IPC->blocked[0], IPC->dropped[0], IPC->received[0],
-            IPC->sent[1], IPC->blocked[1], IPC->dropped[1], IPC->received[1]);
-#ifdef USE_POSIX_SEM
-        fprintf(stdout,"      simsem pass/wait: CPU:%d/%d IPU:%d/%d\r\n",
-            IPC->pass[0], IPC->wait[0],IPC->pass[1], IPC->wait[1]);
-#else
-        fprintf(stdout,"      mutex pass/wait: CPU:%d/%d IPU:%d/%d\r\n",
-            IPC->pass[0], IPC->wait[0],IPC->pass[1], IPC->wait[1]);
-#endif
-    }
-    fprintf(stdout,"      MSD %.6x MAPC[0..5]: %08x %08x %08x %08x %08x %08x\r\n",
-        SPAD[0xf3], MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-
-    fflush(stdout);
-#ifdef JIMTRY
-    /* first signal starts tracing, second turns it off */
-    if (cpu_dev.dctrl & DEBUG_INST) {
-        cpu_dev.dctrl &= ~DEBUG_INST;           /* stop instruction trace */
-        cpu_dev.dctrl &= ~DEBUG_IRQ;            /* stop interrupt trace */
-    } else {
-        cpu_dev.dctrl |= DEBUG_INST;            /* start instruction trace */
-        cpu_dev.dctrl |= DEBUG_IRQ;             /* stop interrupt trace */
-    }
-#endif
-    /* re-attach routine to signal */
-    signal(SIGDUMP, DumpStatus);
-}
-//CPUDEBUG #endif
-
-/* DumpHist called when receiving SIGUSR2 */
+#ifdef DEBUG4IPU
+/* Dump instruction history */
 static void DumpHist()
 {
-//  int32   val=0;
-//  char    *cptr = (char *)"100";              /* number of entries to dump */
-
-    //t_stat cpu_show_hist(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
-
-    fflush(sim_deb);
     /* dump instruction history */
-//    cpu_show_hist(stdout, (UNIT *)0, (int32)0, (void *)0);
+//  cpu_show_hist(stdout, (UNIT *)0, (int32)0, (void *)0);
+//  fflush(stdout);
     cpu_show_hist(sim_deb, (UNIT *)0, (int32)0, (void *)0);
     fflush(sim_deb);
-#ifdef JIMTRY
-    /* first signal starts tracing, second turns it off */
-    if (cpu_dev.dctrl & DEBUG_INST) {
-        cpu_dev.dctrl &= ~DEBUG_INST;           /* stop instruction trace */
-        cpu_dev.dctrl &= ~DEBUG_IRQ;            /* stop interrupt trace */
-    } else {
-        cpu_dev.dctrl |= DEBUG_INST;            /* start instruction trace */
-        cpu_dev.dctrl |= DEBUG_IRQ;             /* stop interrupt trace */
-    }
-#endif
-#ifndef CPUONLY
-    /* re-attach routine to signal */
-    signal(SIGUSR2, DumpHist);
-#endif
 }
-#endif /* USE_IPU_THREAD */
+#endif
 
 #ifdef USE_POSIX_SEM
-//CPUDEBUG #ifndef CPUONLY
 LOCAL void set_simsem()
 {
     if (IPC != 0) {
@@ -693,7 +567,6 @@ LOCAL void unlock_mutex()
     }
 }
 #endif
-#endif /* CPUONLY */
 
 #ifdef NOT_USED
 /* this function is used to extract mode bits from PSD 1 & 2 */
@@ -2009,7 +1882,6 @@ wait_loop:
                     reason, sim_interval);
                 fflush(sim_deb);
 #ifdef DEBUG4IPU
-                DumpStatus();
                 DumpHist();
 #endif
                 return reason;
@@ -2032,9 +1904,9 @@ wait_loop:
         if (skipinstr) {                            /* need to skip interrupt test? */
             skipinstr = 0;                          /* skip only once */
             sim_debug(DEBUG_IRQ, my_dev,
-                "%s Skip instruction PSD %08x %08x irq_pend %d wait4int %d irq_auto %x\n",
+                "%s Skip instruction PSD %08x %08x irq_pend %d wait4int %d\n",
                 (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
-                PSD1, PSD2, irq_pend, wait4int, irq_auto);
+                PSD1, PSD2, irq_pend, wait4int);
                 sim_debug(DEBUG_IRQ, my_dev,
                 "Skip instruction OPSD %08x %08x PSD %08x %08x CPUSTATUS %08x\n",
                 OPSD1, OPSD2, PSD1, PSD2, CPUSTATUS);
@@ -2108,11 +1980,6 @@ wait_loop:
                     "IPU pthread mutex completed for this processsor\n");
 #endif
 #endif
-#endif
-#ifndef USE_IPU_THREAD
-                /* attach routine to signal SIGDUMP */
-                signal(SIGDUMP, DumpStatus);
-                signal(SIGUSR2, DumpHist);
 #endif
 
 #ifndef USE_IPU_THREAD
@@ -2238,11 +2105,6 @@ loadend:
                     PC, PSD1, PSD2, M[0x20>2], M[0x80>>2]);
                 wait4int = 0;                       /* wait is over for int */
                 skipinstr = 1;                      /* skip interrupt test */
-//#define TRACE_SIPU
-#ifdef TRACE_SIPU
-                if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                    cpu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                 goto newpsd;                        /* go process trap */
             }
             /* wait for sipu to start us on ipu */
@@ -2260,10 +2122,6 @@ loadend:
                         (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                         PC, PSD1, PSD2, M[0x20>2], M[0x80>>2]);
                     skipinstr = 1;                  /* skip interrupt test */
-#ifdef TRACE_SIPU
-                    if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                        cpu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                     goto newpsd;                    /* go process trap */
                 }
                 if (wait4sipu) {
@@ -2288,11 +2146,6 @@ loadend:
                     PC, PSD1, PSD2, M[0x20>2], M[0x80>>2]);
                 wait4int = 0;                       /* wait is over for int */
                 skipinstr = 1;                      /* skip interrupt test */
-//#define TRACE_SIPU
-#ifdef TRACE_SIPU
-                if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                    cpu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                 goto newpsd;                        /* go process trap */
             }
             /* we may or may not be waiting for sipu */
@@ -2321,10 +2174,6 @@ cond_ok:
                         (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                         PC, PSD1, PSD2, M[0x20>2], M[0x80>>2]);
                     skipinstr = 1;                  /* skip interrupt test */
-#ifdef TRACE_SIPU
-                    if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                        ipu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                     goto newpsd;                    /* go process trap */
                 }
                 /* unblocked and locked and no async trap */
@@ -2345,7 +2194,7 @@ cond_ok:
 #endif /* CPU_ONLY*/
 
         /* process any pending interrupts */
-        if ((irq_pend || wait4int) && (irq_auto == 0)) {
+        if (irq_pend || wait4int) {
             /* see if ints are pending */
             uint32 int_icb;                         /* interrupt context block address */
             uint32 ilev;
@@ -2402,22 +2251,12 @@ cond_ok:
                         ((t & 0x0f80ffff) == 0x00807f06) || /* RT Clock */
                         ((t & 0x0f00ffff) == 0x03007f04)) { /* Interval timer */
                         /* if this is F class I/O interrupt, clear the active level */
-                        /* SPAD entries for interrupts begin at 0x80 or 0x20 at IPU */
-                        if ((irq_auto) != 0) {
-                            sim_debug(DEBUG_IRQ, my_dev,
-                                "<|>Auto-reset irq_auto NOT zero %x INTS[%02x] %08x SPAD[%02x] %08x\n",
-                                irq_auto, il, INTS[il], il+0x80, SPAD[il+0x80]);
-                        }
-                        irq_auto = il;              /* show processing in blocked mode */
+                        /* SPAD entries for interrupts begin at 0x80 */
                         sim_debug(DEBUG_IRQ, my_dev,
-                            "<|>Auto-reset interrupt INTS[%02x] %08x SPAD[%02x] %08x simi %02x\n",
-                            il, INTS[il], il+0x80, SPAD[il+0x80], sim_interval);
-//#define LEAVE_ACTIVE
-#ifndef LEAVE_ACTIVE
-/*AIR*/                 INTS[irq_auto] &= ~INTS_ACT;    /* deactivate specified int level */
-/*AIR*/                 SPAD[irq_auto+0x80] &= ~SINT_ACT;   /* deactivate in SPAD too */
-                        irq_auto = 0;
-#endif
+                            "<|>Auto-reset interrupt INTS[%02x] %08x SPAD[%02x] %08x\n",
+                            il, INTS[il], il+0x80, SPAD[il+0x80]);
+                        INTS[il] &= ~INTS_ACT;      /* deactivate specified int level */
+                        SPAD[il+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
                     }
                 } else {
                     sim_debug(DEBUG_IRQ, my_dev,
@@ -2464,28 +2303,20 @@ cond_ok:
                 bc = RMW(int_icb+20) & 0xffffff;
                 t = SPAD[il+0x80];                  /* get spad entry for interrupt */
                 if (t & 0x00800000) {               /* is this a non I/O interrupt */
-#ifdef TRACE_SIPU
-                if (il == 0x18)
-                    cpu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                     // non-I/O interrupt
                     sim_debug(DEBUG_IRQ, my_dev,
-                        "<|>Int2 %02x ICBA %06x IOCLA %06x STAT %06x irq_auto %x\n",
-                        il, int_icb, RMW(int_icb+16), RMW(int_icb+20), irq_auto);
+                        "<|>Int2 %02x ICBA %06x IOCLA %06x STAT %06x\n",
+                        il, int_icb, RMW(int_icb+16), RMW(int_icb+20));
                 } else {
-#ifdef TRACE_SIPU
-                if ((il == 0x13) && ((RMW(bc) & 0xff000000) == 0xfc000000))
-                    cpu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                     // I/O interrupt ICB
                     sim_debug(DEBUG_IRQ, my_dev,
-                        "<|>Int3 %02x ICBA %06x IOCLA %06x STAT %08x SW1 %08x SW2 %08x irq_auto %x\n",
-                        il, int_icb, RMW(int_icb+16), RMW(int_icb+20), RMW(bc), RMW(bc+4), irq_auto);
+                        "<|>Int3 %02x ICBA %06x IOCLA %06x STAT %08x SW1 %08x SW2 %08x\n",
+                        il, int_icb, RMW(int_icb+16), RMW(int_icb+20), RMW(bc), RMW(bc+4));
                 }
                 if (wait4int)
                     sim_debug(DEBUG_IRQ, my_dev,
                     "End %s WAIT OPSD %.8x %.8x NPSD %.8x %.8x OSTAT %08x NSTAT %08x\n",
-		            (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                    (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                     RMW(int_icb), RMW(int_icb+4), PSD1, PSD2, oldstatus, CPUSTATUS);
 
                 wait4int = 0;                       /* wait is over for int */
@@ -2995,7 +2826,7 @@ exec2:
 //                      sim_debug(DEBUG_DETAIL, my_dev,
                         sim_debug(DEBUG_TRAP, my_dev,
                             "Starting %s HALT PSD %.8x %.8x TRAPME %02x CPUSTATUS %08x time %.8x\n",
-    		                (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                            (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                             PSD1, PSD2, TRAPME, CPUSTATUS, (uint32)result);
                     }
 #ifdef MAYBE_BAD
@@ -3020,7 +2851,7 @@ exec2:
                     "\n[][][][][][][][][][] CPU HALT [1][][][][][][][][][]\n");
                 sim_debug(DEBUG_EXP, my_dev,
                     "AT %s: PSD1 %.8x PSD2 %.8x TRAPME %02x CPUSTATUS %08x\n",
-		            (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                    (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                     PSD1, PSD2, TRAPME, CPUSTATUS);
                 for (ix=0; ix<8; ix+=2) {
                     sim_debug(DEBUG_EXP, my_dev,
@@ -3031,7 +2862,7 @@ exec2:
 
                 fprintf(stdout, "\r\n[][][][][][][][][][] CPU HALT [1][][][][][][][][][]\r\n");
                 fprintf(stdout, "AT %s: PSD1 %.8x PSD2 %.8x TRAPME %02x CPUSTATUS %08x\r\n",
-		            (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                    (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                     PSD1, PSD2, TRAPME, CPUSTATUS);
                 for (ix=0; ix<8; ix+=2) {
                     fprintf(stdout, "GPR[%d] %.8x GPR[%d] %.8x\r\n",
@@ -3050,9 +2881,7 @@ exec2:
 #ifndef CPUONLY
 #ifndef USE_IPU_THREAD
             if ((IPU_MODEL) && (IPC->pid[1] != 0)) {
-                /* If we have an IPU model, and we are on the CPU: destroy the IPU */
-//4DEBUG        kill(IPC->pid[1], SIGUSR1);         /* trigger Dump on the IPU */
-//4DEBUG        kill(IPC->pid[1], SIGUSR2);         /* trigger Dump on the IPU */
+                /* If we have an forked IPU model, and we are on the CPU: destroy the IPU */
                 kill(IPC->pid[1], SIGKILL);         /* destroy the IPU */
             }
 #endif
@@ -3095,7 +2924,7 @@ do_ipu_wait:
 //                      sim_debug(DEBUG_DETAIL, my_dev,
                         sim_debug(DEBUG_TRAP, my_dev,
                             "Starting %s WAIT1 PSD1 %.8x PSD2 %.8x TRAPME %02x CPUSTATUS %08x time %.8x\n",
-		                    (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                            (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                             PSD1, PSD2, TRAPME, CPUSTATUS, (uint32)result);
                     }
 #ifdef MAYBE_BAD
@@ -3120,7 +2949,7 @@ do_ipu_wait:
 //                      sim_debug(DEBUG_DETAIL, my_dev,
                         sim_debug(DEBUG_TRAP, my_dev,
                             "Starting %s WAIT2 PSD1 %.8x PSD2 %.8x TRAPME %02x CPUSTATUS %08x time %.8x\n",
-		                    (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                            (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
                             PSD1, PSD2, TRAPME, CPUSTATUS, (uint32)result);
                     }
                     /* tell simh we will be waiting */
@@ -3218,16 +3047,6 @@ do_ipu_wait:
                 if (CPUSTATUS & BIT24) {            /* see if old mode is blocked */
                     if (!(CPUSTATUS & ONIPU))
                         irq_pend = 1;               /* start scanning interrupts again */
-#ifdef LEAVE_ACTIVE
-                    if (irq_auto) {
-/*AIR*/                 INTS[irq_auto] &= ~INTS_ACT;    /* deactivate specified int level */
-/*AIR*/                 SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
-                        sim_debug(DEBUG_IRQ, my_dev,
-                            "<|>IntX0 deactivate level %02x at UEI PSD1 %08x PSD2 %08x\n",
-                            irq_auto, PSD1, PSD2);
-/*AIR*/                 irq_auto = 0;               /* show done processing in blocked mode */
-                    }
-#endif
                 }
                 CPUSTATUS &= ~BIT24;                /* clear status word bit 24 */
                 MODES &= ~(BLKMODE|RETBLKM);        /* reset blocked & retain mode bits */
@@ -3249,7 +3068,7 @@ do_ipu_wait:
                 /* if we have an IPU, process SIPU instruction */
                 sim_debug(DEBUG_TRAP, my_dev,
                     "SIPU @%s CPUSTATUS %08x SPAD[0xf9] %08x CCW %0x PSD %08x %08x\n",
-			        (CPUSTATUS & ONIPU)? "IPU": "CPU",
+                    (CPUSTATUS & ONIPU)? "IPU": "CPU",
                     CPUSTATUS, SPAD[0xf9], CCW, PSD1, PSD2);
 
 #ifndef CPUONLY
@@ -4396,20 +4215,9 @@ skipit:
 
                 if ((PSD2 & SETBBIT) == 0) {        /* see if new mode is unblocked */
                     if (TPSD2 & SETBBIT) {          /* see if old mode is blocked */
+                        /* we changed from blocked to unblocked */
                         if (!(CPUSTATUS & ONIPU))
                             irq_pend = 1;           /* start scanning interrupts again */
-                        /* we changed from blocked to unblocked, processes auto irq */
-#ifdef LEAVE_ACTIVE
-                        /* interrupts are being disabled, test for auto irq */
-                        if (irq_auto) {
-/*AIR*/                     INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
-/*AIR*/                     SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
-                            sim_debug(DEBUG_IRQ, my_dev,
-                                "<|>IntX2 deactivate level %02x at CALM %08x %08x STATUS %08x\n",
-                                irq_auto, PSD1, PSD2, CPUSTATUS);
-/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
-                        }
-#endif
                     }
                 }
 
@@ -5539,7 +5347,7 @@ meoa:       /* merge point for eor, and, or */
             {
 #ifndef CPUONLY
                 /* unlock the semaphore */
-	    	    if (CCW & HASIPU)
+                if (CCW & HASIPU)
 #ifdef USE_POSIX_SEM
                     clr_simsem();
 #else
@@ -6140,20 +5948,9 @@ doovr2:
 
                 if ((PSD2 & SETBBIT) == 0) {        /* see if new mode is unblocked */
                     if (TPSD2 & SETBBIT) {          /* see if old mode is blocked */
+                        /* we changed from blocked to unblocked */
                         if (!(CPUSTATUS & ONIPU))
                             irq_pend = 1;           /* start scanning interrupts again */
-                        /* we changed from blocked to unblocked, processes auto irq */
-#ifdef LEAVE_ACTIVE
-                        /* interrupts are being disabled, test for auto irq */
-                        if (irq_auto) {
-/*AIR*/                     INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
-/*AIR*/                     SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
-                            sim_debug(DEBUG_IRQ, my_dev,
-                                "<|>IntX3 deactivate level %02x at SVC #%2x PSD1 %08x\n",
-                                irq_auto, temp2, PSD1);
-/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
-                        }
-#endif
                     }
                 }
 
@@ -6736,10 +6533,6 @@ dohist:
                 break;
 
             case 0x3:       /* LPSD F980 */
-#ifdef TRACE_SIPU
-                if (cpu_dev.dctrl & DEBUG_INST)
-                    cpu_dev.dctrl &= ~DEBUG_INST;    /* stop instruction trace */
-#endif
                 /* fall through */;
             case 0x5:       /* LPSDCM FA80 */
                 if ((MODES & PRIVBIT) == 0) {       /* must be privileged */
@@ -6765,11 +6558,12 @@ dohist:
                     if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
                         TRAPSTATUS |= BIT10;        /* set bit 10 of trap status */
                         TRAPSTATUS |= BIT7;         /* set bit 7 of trap status */
-                    } else
+                    } else {
                         TRAPSTATUS |= BIT18;        /* set bit 18 of trap status */
                     sim_debug(DEBUG_TRAP, my_dev,
                         "LPSD TRAP1 %02x SPEC12 OP %04x addr %08x FC %02x PSD %08x %08x\n",
                         TRAPME, OP, addr, FC, PSD1, PSD2);
+                    }
                     goto newpsd;                    /* memory read error or map fault */
                 }
                 bc = CPUSTATUS;                     /* save the CPU STATUS */
@@ -6783,11 +6577,12 @@ dohist:
                     if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
                         TRAPSTATUS |= BIT10;        /* set bit 10 of trap status */
                         TRAPSTATUS |= BIT7;         /* set bit 7 of trap status */
-                    } else
+                    } else {
                         TRAPSTATUS |= BIT18;        /* set bit 18 of trap status */
                         sim_debug(DEBUG_TRAP, my_dev,
                             "LPSD TRAP2 %02x SPEC12 OP %04x addr %08x FC %02x PSD %08x %08x\n",
                             TRAPME, OP, addr, FC, PSD1, PSD2);
+                    }
                     goto newpsd;                    /* memory read error or map fault */
                 }
                 if (OPR & 0x0200) {                 /* Was it LPSDCM? */
@@ -6852,20 +6647,9 @@ dohist:
 
                 if ((PSD2 & SETBBIT) == 0) {        /* see if new mode is unblocked */
                     if (TPSD2 & SETBBIT) {          /* see if old mode is blocked */
+                        /* we changed from blocked to unblocked */
                         if (!(CPUSTATUS & ONIPU))
                             irq_pend = 1;           /* start scanning interrupts again */
-                        /* we changed from blocked to unblocked, processes auto irq */
-#ifdef LEAVE_ACTIVE
-                        /* interrupts are being disabled, test for auto irq */
-                        if (irq_auto) {
-/*AIR*/                     INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
-/*AIR*/                     SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
-                            sim_debug(DEBUG_IRQ, my_dev,
-                                "<|>IntX4 deactivate level %02x at LPSD(CM) %08x %08x STATUS %08x\n",
-                                irq_auto, PSD1, PSD2, CPUSTATUS);
-/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
-                        }
-#endif
                     }
                 }
 
@@ -7046,14 +6830,6 @@ dohist:
                     SPAD[prior+0x80] |= SINT_ENAB;  /* enable in SPAD too */
                     irq_pend = 1;                   /* start scanning interrupts again */
 
-#ifdef TRY_ME_01072022
-            sim_debug(DEBUG_IRQ, my_dev,
-                "EI skipinstr %d PSD1 %08x irq_pend %d wait4int %d irq_auto %x\n",
-                skipinstr, PSD1, irq_pend, wait4int, irq_auto);
-            sim_debug(DEBUG_IRQ, my_dev,
-                "EI INTS[%d] = %08x SPAD[%d] %08x CPUSTATUS %08x\n",
-                prior, INTS[prior], 0x80+prior, SPAD[prior+0x80], CPUSTATUS);
-#endif
                     /* test for clock at address 0x7f06 and interrupt level 0x18 */
                     /* the diags want the type to be 0 */
                     /* UTX wants the type to be 3?? */
@@ -7061,7 +6837,6 @@ dohist:
                     if ((SPAD[prior+0x80] & 0x0000ffff) == 0x00007f06) {
                         sim_debug(DEBUG_IRQ, my_dev,
                             "Clock EI %02x SPAD %08x Turn on\n", prior, t);
-//FIXME TRY 4 Diag      rtc_setup(1, prior);        /* tell clock to start */
                         rtc_setup(1, prior);        /* tell clock to start */
                     }
                     break;
@@ -7139,7 +6914,7 @@ dohist:
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
                     if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
                         break;                      /* ignore */
-        
+
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
                         break;                      /* ignore for F class */
 
@@ -7736,7 +7511,7 @@ newpsd:
             case IPUUNDEFI_TRAP:                    /* 0xA8 PL0A IPU Undefined Instruction Trap */
 //MOVED     case CALM_TRAP:                         /* 0xA8 PL0A Call Monitor Instruction Trap */
 //MOVED     case SIGNALIPU_TRAP:                    /* 0xAC PL0B Signal IPU/CPU Trap */
-		
+        
             case ADDRSPEC_TRAP:                     /* 0xB0 PL0C Address Specification Trap */
 //BAD HERE  case CONSOLEATN_TRAP:                   /* 0xB4 PL0D Console Attention Trap */
             case PRIVHALT_TRAP:                     /* 0xB8 PL0E Privlege Mode Halt Trap */
@@ -7796,17 +7571,13 @@ newpsd:
             case CONSOLEATN_TRAP:                   /* 0xB4 PL0D Console Attention Trap */
 //112522    case IPUUNDEFI_TRAP:                    /* 0xA8 PL0A IPU Undefined Instruction Trap */
             case SIGNALIPU_TRAP:                    /* 0xAC PL0B Signal IPU/CPU Trap */
-#ifdef TRACE_SIPU
-                if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                    cpu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                 sim_debug(DEBUG_TRAP, my_dev,
                     "At %s TRAPME %02x PC %08x PSD1 %08x PSD2 %08x CPUSTATUS %08x tta %02x\n",
-			        (CPUSTATUS & ONIPU)? "IPU": "CPU",
+                    (CPUSTATUS & ONIPU)? "IPU": "CPU",
                     TRAPME, PC, PSD1, PSD2, CPUSTATUS, tta);
                 sim_debug(DEBUG_TRAP, my_dev,
                     "At %s TRAP %02x IR %08x PSD1 %08x PSD2 %08x CPUSTATUS %08x drop_nop %01x\n",
-			        (CPUSTATUS & ONIPU)? "IPU": "CPU",
+                    (CPUSTATUS & ONIPU)? "IPU": "CPU",
                     TRAPME, IR, PSD1, PSD2, CPUSTATUS, drop_nop);
                 sim_debug(DEBUG_TRAP, my_dev,
                     "R0=%.8x R1=%.8x R2=%.8x R3=%.8x\n", GPR[0], GPR[1], GPR[2], GPR[3]);
@@ -7867,7 +7638,7 @@ newpsd:
                     if (IPU_MODEL && (CPUSTATUS & ONIPU)) {
                         sim_debug(DEBUG_TRAP, my_dev,
                             "%s: Halt TRAP CPUSTATUS %08x CCW %08x\n",
-			                (CPUSTATUS & ONIPU)? "IPU": "CPU",
+                            (CPUSTATUS & ONIPU)? "IPU": "CPU",
                             CPUSTATUS, CCW);
 
 #ifndef CPUONLY
@@ -7951,7 +7722,7 @@ newpsd:
 
                     sim_debug(DEBUG_TRAP, my_dev,
                         "Process %s TRAPME %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x MODE %08x\n",
-			            (CPUSTATUS & ONIPU)? "IPU": "CPU",
+                        (CPUSTATUS & ONIPU)? "IPU": "CPU",
 //FIX                   TRAPME, PSD1, PSD2, CPUSTATUS, MODES);
                         tta, PSD1, PSD2, CPUSTATUS, MODES);
                     /* TODO provide page fault data to word 6 */
@@ -7962,7 +7733,7 @@ newpsd:
             "PAGE TRAP %02x TSTAT %08x LOAD MAPS PSD1 %08x PSD2 %08x CPUSTAT %08x pfault %08x\n",
                             TRAPME, TRAPSTATUS, PSD1, PSD2, CPUSTATUS, pfault);
                     }
-        	        TRAPSTATUS = CPUSTATUS & 0x57;  /* clear all trap status except cpu type */
+                    TRAPSTATUS = CPUSTATUS & 0x57;  /* clear all trap status except cpu type */
                     TRAPME = 0;                     /* to be safe */
                     break;                          /* Go execute the trap */
                 }
@@ -7982,7 +7753,7 @@ newpsd:
         "\n[][][][][][][][][][] HALT [3][][][][][][][][][]\n");
     sim_debug(DEBUG_EXP, my_dev,
         "AT %s: PSD1 %.8x PSD2 %.8x TRAPME %02x IPUSTATUS %08x\n",
-	    (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
+        (CPUSTATUS & ONIPU) ? "IPU" : "CPU",
         PSD1, PSD2, TRAPME, CPUSTATUS);
     for (ix=0; ix<8; ix+=2) {
         sim_debug(DEBUG_EXP, my_dev,
@@ -7994,7 +7765,6 @@ newpsd:
 
 #ifndef USE_IPU_THREAD
 #ifdef DEBUG4IPU
-    DumpStatus();
     DumpHist();
 #endif
 #endif
@@ -8059,15 +7829,11 @@ t_stat cpu_reset(DEVICE *dptr)
 #else
     /* local memory is shared, and is defined as M[MAXMEMSIZE] */
     /* no special allocation is required for 2nd thread */
-//    IPC = 0;
     IPC = (struct ipcom *)&myipc;
-//  sim_printf("@reset IPC set to %p\n", IPC);
 #endif
 #else /* CPUONLY */
     /* local memory is not shared, and is defined as M[MAXMEMSIZE] */
     /* no special allocation is required on CPU only */
-//    IPC = 0;
-//    IPC = &myipc;
 #endif /* CPUONLY */
 
 #ifdef USE_IPU_THREAD

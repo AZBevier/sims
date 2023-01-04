@@ -486,7 +486,7 @@ readmore:
 
 //printf("2 file length %ld %lx bytes\n", bytes, bytes);
 //67printf("2 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
-printf("2 start writing at %ld %lx bytes offset\n", bytes-4, bytes-4);
+//printf("2 start writing at %ld %lx bytes offset\n", bytes-4, bytes-4);
                     if (hc & 0xffff0000)            /* check for garbage */
                         hc = 0;                     /* assume EOF on disk */
 

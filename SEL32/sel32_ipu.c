@@ -1,7 +1,7 @@
 /* sel32_ipu.c: Sel 32 IPU simulator
 
    Copyright (c) 2018-2023, James C. Bevier
-   Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
+   Portions provided by Geert Rolf
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -99,9 +99,6 @@ LOCAL   uint32  pfault;                     /* page # of fault from read/write *
 /* bits 8-18 has map reg contents for this page (Map << 13) */
 /* bit 19-31 is zero for page offset of zero */
 
-#ifdef USE_POSIX_SEM
-LOCAL   int32           irq_auto = 0;       /* auto reset interrupt processing flag */
-#endif
 LOCAL   uint8           wait4int = 0;       /* waiting for interrupt if set */
 
 /* define traps */
@@ -516,129 +513,15 @@ void millinap(int msec)
 }
 #endif
 
-#include <signal.h>
-#define SIGDUMP SIGUSR1
-
-#ifdef USE_POSIX_SEM
-/* DumpStatus called when receiving SIGUSR1 */
-static void DumpStatus()
-{
-    int i, j;
-    char ll[120];
-    fprintf(stdout,"@%s: OIR=%08x W4S=%d W4I=%d IRA=%d OPSD=%08x/%08x C=%08x T=%08x\r\n",
-        (IPUSTATUS & ONIPU) ? "IPU" : "CPU", OIR, wait4sipu, wait4int, irq_auto,
-        OPSD1, OPSD2, IPUSTATUS, TRAPSTATUS);
-    fprintf(stdout,"@%s: IR=%08x W4S=%d W4I=%d IRA=%d PSD=%08x/%08x C=%08x T=%08x\r\n",
-        (IPUSTATUS & ONIPU) ? "IPU" : "CPU", IR, wait4sipu, wait4int, irq_auto,
-        PSD1, PSD2, IPUSTATUS, TRAPSTATUS);
-    fprintf(stdout, "R0=%.8x R1=%.8x R2=%.8x R3=%.8x\r\n", GPR[0], GPR[1], GPR[2], GPR[3]);
-    fprintf(stdout, "R4=%.8x R5=%.8x R6=%.8x R7=%.8x\r\n", GPR[4], GPR[5], GPR[6], GPR[7]);
-    fprintf(stdout,"      SPAD[f0]=%x SPAD[f7]=%08x [f1]=%08x [f2]=%08x [f3]=%08x\r\n",
-        SPAD[0xf0], SPAD[0xf7], SPAD[0xf1], SPAD[0xf2], SPAD[0xf3]);
-    /* dump acticve SPAD entries */
-    for (i=0, j=0; i <0xf0; i++) {
-        if (SPAD[i] == 0 || SPAD[i] == 0xffffffff)
-            continue;
-        sprintf(&ll[j],"[%02x=%08x]", i, SPAD[i]);
-        j += 13;
-        ll[j] = '\0';
-        if (j >= (6 * 13)) {
-            j = 0;
-            fprintf(stdout, "      SPAD  %s\r\n", ll);
-        }
-    }
-    if (j > 0) {
-        fprintf(stdout, "      SPAD  %s\r\n", ll);
-    }
-    fprintf(stdout,"      SPAD[f0-f7] %08x %08x %08x %08x %08x %08x %08x %08x\r\n",
-        SPAD[0xf0], SPAD[0xf1], SPAD[0xf2], SPAD[0xf3], SPAD[0xf4], SPAD[0xf5], SPAD[0xf6], SPAD[0xf7]);
-    fprintf(stdout,"      SPAD[f8-ff] %08x %08x %08x %08x %08x %08x %08x %08x\r\n",
-        SPAD[0xf8], SPAD[0xf9], SPAD[0xfa], SPAD[0xfb], SPAD[0xfc], SPAD[0xfd], SPAD[0xfe], SPAD[0xff]);
-
-    /* dump active interrupt status words */
-    for (i=0, j=0; i <0x80; i++) {
-        if (INTS[i] == 0 || INTS[i] == 0xffffffff)
-            continue;
-        sprintf(&ll[j],"[%02x=%08x]", i, INTS[i]);
-        j += 13;
-        ll[j] = '\0';
-        if (j >= (8 * 13)) {
-            j = 0;
-            fprintf(stdout, "INTS  %s\r\n", ll);
-        }
-    }
-    if (j > 0) {
-        fprintf(stdout, "INTS  %s\r\n", ll);
-    }
-    if (IPUSTATUS & ONIPU)
-        fprintf(stdout,"      M[0x%02x]=%08x [0x%02x]=%08x [0x%02x]=%08x\r\n",
-            0x24, M[0x24 >> 2], 0x48, M[0x48 >> 2], 0x4c, M[0x4c >> 2]);
-    else
-        fprintf(stdout,"      M[0x%02x]=%08x [0x%02x]=%08x [0x%02x]=%08x\r\n",
-            0x84, M[0x84 >> 2], 0xa8, M[0xa8 >> 2], 0xac, M[0xac >> 2]);
-    if (IPC) {
-        if (IPC->atrap[0])
-            fprintf(stdout,"      CPU: Pending Async TRAP: %02x\r\n", IPC->atrap[0]);
-        else
-            fprintf(stdout,"      CPU: No pending Async TRAP\r\n");
-        if (IPC->atrap[1])
-            fprintf(stdout,"      IPU: Pending Async TRAP: %02x\r\n", IPC->atrap[1]);
-        else
-            fprintf(stdout,"      IPU: No pending Async TRAP\r\n");
-        fprintf(stdout,"      atraps snt/blck/drop/rcvd CPU: %d/%d/%d/%d IPU: %d/%d/%d/%d\r\n",
-            IPC->sent[0], IPC->blocked[0], IPC->dropped[0], IPC->received[0],
-            IPC->sent[1], IPC->blocked[1], IPC->dropped[1], IPC->received[1]);
-#ifdef USE_POSIX_SEM
-        fprintf(stdout,"      simsem pass/wait: CPU:%d/%d IPU:%d/%d\r\n",
-            IPC->pass[0], IPC->wait[0],IPC->pass[1], IPC->wait[1]);
-#else
-        fprintf(stdout,"      mutex pass/wait: CPU:%d/%d IPU:%d/%d\r\n",
-            IPC->pass[0], IPC->wait[0],IPC->pass[1], IPC->wait[1]);
-#endif
-    }
-    fprintf(stdout,"      MSD %.6x MAPC[0..5]: %08x %08x %08x %08x %08x %08x\r\n",
-        SPAD[0xf3], MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-
-    fflush(stdout);
-#ifdef JIMTRY
-    /* first signal starts tracing, second turns it off */
-    if (ipu_dev.dctrl & DEBUG_INST) {
-        ipu_dev.dctrl &= ~DEBUG_INST;       /* stop instruction trace */
-        ipu_dev.dctrl &= ~DEBUG_IRQ;        /* stop interrupt trace */
-    } else {
-        ipu_dev.dctrl |= DEBUG_INST;        /* start instruction trace */
-        ipu_dev.dctrl |= DEBUG_IRQ;         /* stop interrupt trace */
-    }
-#endif
-    /* re-attach routine to signal */
-    signal(SIGDUMP, DumpStatus);
-}
-
-/* DumpHist called when receiving SIGUSR2 */
+#ifdef DEBUG4IPU
+/* Dump instruction history */
 static void DumpHist()
 {
-//  int32   val=0;
-//  char    *cptr = (char *)"100";          /* number of entries to dump */
-
-    //t_stat ipu_show_hist(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
-
-    fflush(sim_deb);
     /* dump instruction history */
-//    ipu_show_hist(stdout, (UNIT *)0, (int32)0, (void *)0);
+//  ipu_show_hist(stdout, (UNIT *)0, (int32)0, (void *)0);
+//  fflush(stdout);
     ipu_show_hist(sim_deb, (UNIT *)0, (int32)0, (void *)0);
     fflush(sim_deb);
-#ifdef JIMTRY
-    /* first signal starts tracing, second turns it off */
-    if (ipu_dev.dctrl & DEBUG_INST) {
-        ipu_dev.dctrl &= ~DEBUG_INST;       /* stop instruction trace */
-        ipu_dev.dctrl &= ~DEBUG_IRQ;        /* stop interrupt trace */
-    } else {
-        ipu_dev.dctrl |= DEBUG_INST;        /* start instruction trace */
-        ipu_dev.dctrl |= DEBUG_IRQ;         /* stop interrupt trace */
-    }
-#endif
-    /* re-attach routine to signal */
-    signal(SIGUSR2, DumpHist);
 }
 #endif
 
@@ -2038,11 +1921,6 @@ void *ipu_sim_instr(void *value) {
     wait4sipu = 1;                                  /* now wait for 1st sipu */
     /* IPU thread setup complete */
 
-    /* attach routine to signal SIGDUMP */
-#ifdef USE_POSIX_SEM
-    signal(SIGDUMP, DumpStatus);
-    signal(SIGUSR2, DumpHist);
-#endif
     sim_debug(DEBUG_TRAP, my_dev,
         "Starting at ipu wait_loop 1 %p 0 %08x 4 %08x\n", (void *)M, M[0], M[1]);
     fflush(sim_deb);
@@ -2096,16 +1974,10 @@ wait_loop:
                     (IPUSTATUS & ONIPU) ? "IPU" : "CPU", __LINE__, TRAPME, SPAD[0xf0]);
                 sim_debug(DEBUG_TRAP, my_dev,
                     "%s: PC %08x PSD1 %08x PSD2 %08x 0x20 %x 0x80 %x\n",
-    		        (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                    (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
                     PC, PSD1, PSD2, M[0x20>2], M[0x80>>2]);
 //              wait4sipu = 0;                      /* wait is over for sipu */
                 wait4int = 0;                       /* wait is over for int */
-//12232022      skipinstr = 1;                      /* skip interrupt test */
-//#define TRACE_SIPU
-#ifdef TRACE_SIPU
-                if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                    ipu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                 goto newpsd;                        /* go process trap */
             }
             /* wait for sipu to start us on ipu */
@@ -2116,17 +1988,12 @@ wait_loop:
                     TRAPME = IPC->atrap[MyIndex];   /* get trap number */
                     IPC->atrap[MyIndex] = 0;        /* clear flag */
                     IPC->received[MyIndex]++;
-                	sim_debug(DEBUG_TRAP, my_dev, "%s: (%d) Async TRAP %02x SPAD[0xf0] %08x\n",
+                    sim_debug(DEBUG_TRAP, my_dev, "%s: (%d) Async TRAP %02x SPAD[0xf0] %08x\n",
                         (IPUSTATUS & ONIPU) ? "IPU" : "CPU", __LINE__, TRAPME, SPAD[0xf0]);
                     sim_debug(DEBUG_TRAP, my_dev,
                         "%s: PC %08x PSD1 %08x PSD2 %08x 0x20 %x 0x80 %x\n",
-    		            (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                        (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
                         PC, PSD1, PSD2, M[0x20>2], M[0x80>>2]);
-//12232022          skipinstr = 1;                  /* skip interrupt test */
-#ifdef TRACE_SIPU
-                    if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                        ipu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                     goto newpsd;                    /* go process trap */
                 }
                 if (wait4sipu) {
@@ -2158,10 +2025,6 @@ cond_ok:
                         __LINE__, TRAPME, SPAD[0xf0]);
                     sim_debug(DEBUG_TRAP, my_dev, "IPU: PC %08x PSD %08x %08x 0x20 %x\n",
                         PC, PSD1, PSD2, M[0x20>2]);
-#ifdef TRACE_SIPU
-                    if ((TRAPME == SIGNALIPU_TRAP) || (TRAPME == IPUUNDEFI_TRAP))
-                        ipu_dev.dctrl |= DEBUG_INST;    /* start instruction trace */
-#endif
                     goto newpsd;                    /* go process trap */
                 }
             }
@@ -2664,7 +2527,7 @@ exec2:
 //                      sim_debug(DEBUG_DETAIL, my_dev,
                         sim_debug(DEBUG_TRAP, my_dev,
                             "Starting %s HALT PSD1 %.8x PSD2 %.8x TRAPME %02x IPUSTATUS %08x time %.8x\n",
-    		                (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                            (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
                             PSD1, PSD2, TRAPME, IPUSTATUS, (uint32)result);
                     }
 #ifndef DO_A_HALT
@@ -2690,7 +2553,7 @@ exec2:
                     "\n[][][][][][][][][][] IPU HALT [1][][][][][][][][][]\n");
                 sim_debug(DEBUG_EXP, my_dev,
                     "AT %s: PSD1 %.8x PSD2 %.8x TRAPME %02x IPUSTATUS %08x\n",
-		            (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                    (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
                     PSD1, PSD2, TRAPME, IPUSTATUS);
                 for (ix=0; ix<8; ix+=2) {
                     sim_debug(DEBUG_EXP, my_dev,
@@ -2713,14 +2576,6 @@ exec2:
                 }
             }
             fprintf(stdout, "[][][][][][][][][][] IPU HALT [1][][][][][][][][][]\r\n");
-#endif
-#ifdef NOT_ON_IPU
-            if (IPU_MODEL) {
-                /* If we have an IPU, and we are on the CPU: destroy the IPU */
-//4DEBUG        kill(IPC->pid[1], SIGUSR1);         /* trigger Dump on the IPU */
-//4DEBUG        kill(IPC->pid[1], SIGUSR2);         /* trigger Dump on the IPU */
-                kill(IPC->pid[1], SIGKILL);         /* destroy the IPU */
-            }
 #endif
 /*TEST DIAG*/reason = STOP_HALT;                    /* do halt for now */
             cpustop = reason;                       /* tell IPU our state */
@@ -2760,7 +2615,7 @@ do_ipu_wait:
 //                      sim_debug(DEBUG_DETAIL, my_dev,
                         sim_debug(DEBUG_TRAP, my_dev,
                             "Starting %s WAIT1 PSD1 %.8x PSD2 %.8x TRAPME %02x IPUSTATUS %08x time %.8x\n",
-		                    (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                            (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
                             PSD1, PSD2, TRAPME, IPUSTATUS, (uint32)result);
                     } else {
 #ifdef USE_POSIX_SEM
@@ -2782,7 +2637,7 @@ do_ipu_wait:
 //                      sim_debug(DEBUG_DETAIL, my_dev,
                         sim_debug(DEBUG_TRAP, my_dev,
                             "Starting %s WAIT2 PSD1 %.8x PSD2 %.8x TRAPME %02x IPUSTATUS %08x time %.8x\n",
-		                    (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
+                            (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
                             PSD1, PSD2, TRAPME, IPUSTATUS, (uint32)result);
                     }
                     /* tell simh we will be waiting */
@@ -2898,7 +2753,7 @@ do_ipu_wait:
                 /* if we have an IPU, process SIPU instruction */
                 sim_debug(DEBUG_TRAP, my_dev,
                     "SIPU @%s IPUSTATUS %08x SPAD[0xf9] %08x CCW %0x PSD %08x %08x\n",
-			        (IPUSTATUS & ONIPU)? "IPU": "CPU",
+                    (IPUSTATUS & ONIPU)? "IPU": "CPU",
                     IPUSTATUS, SPAD[0xf9], CCW, PSD1, PSD2);
 
                 if (CCW & HASIPU) {
@@ -5164,7 +5019,7 @@ meoa:       /* merge point for eor, and, or */
             if ((TRAPME = Mem_read(addr, &temp)))   /* get the word from memory */
             {
                 /* unlock the semaphore */
-	    	    if (CCW & HASIPU)
+                if (CCW & HASIPU)
 #ifdef USE_POSIX_SEM
                     clr_simsem();
 #else
@@ -6364,11 +6219,12 @@ dohist:
                     if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
                         TRAPSTATUS |= BIT10;        /* set bit 10 of trap status */
                         TRAPSTATUS |= BIT7;         /* set bit 7 of trap status */
-                    } else
+                    } else {
                         TRAPSTATUS |= BIT18;        /* set bit 18 of trap status */
                         sim_debug(DEBUG_TRAP, my_dev,
                             "LPSD TRAP2 %02x SPEC12 OP %04x addr %08x FC %02x PSD %08x %08x\n",
                             TRAPME, OP, addr, FC, PSD1, PSD2);
+                    }
                     goto newpsd;                    /* memory read error or map fault */
                 }
                 if (OPR & 0x0200) {                 /* Was it LPSDCM? */
@@ -6825,7 +6681,7 @@ newpsd:
             case IPUUNDEFI_TRAP:                    /* 0xA8 PL0A IPU Undefined Instruction Trap */
 //MOVED     case CALM_TRAP:                         /* 0xA8 PL0A Call Monitor Instruction Trap */
 //MOVED     case SIGNALIPU_TRAP:                    /* 0xAC PL0B Signal IPU/CPU Trap */
-		
+        
             case ADDRSPEC_TRAP:                     /* 0xB0 PL0C Address Specification Trap */
 //BAD HERE  case CONSOLEATN_TRAP:                   /* 0xB4 PL0D Console Attention Trap */
             case PRIVHALT_TRAP:                     /* 0xB8 PL0E Privlege Mode Halt Trap */
@@ -6891,11 +6747,11 @@ newpsd:
 #endif
                 sim_debug(DEBUG_TRAP, my_dev,
                     "At %s TRAPME %02x PC %08x PSD1 %08x PSD2 %08x IPUSTATUS %08x tta %02x\n",
-			        (IPUSTATUS & ONIPU)? "IPU": "CPU",
+                    (IPUSTATUS & ONIPU)? "IPU": "CPU",
                     TRAPME, PC, PSD1, PSD2, IPUSTATUS, tta);
                 sim_debug(DEBUG_TRAP, my_dev,
                     "At %s TRAP %02x IR %08x PSD1 %08x PSD2 %08x IPUSTATUS %08x drop_nop %01x\n",
-			        (IPUSTATUS & ONIPU)? "IPU": "CPU",
+                    (IPUSTATUS & ONIPU)? "IPU": "CPU",
                     TRAPME, IR, PSD1, PSD2, IPUSTATUS, drop_nop);
                 sim_debug(DEBUG_TRAP, my_dev,
                     "R0=%.8x R1=%.8x R2=%.8x R3=%.8x\n", GPR[0], GPR[1], GPR[2], GPR[3]);
@@ -6956,15 +6812,8 @@ newpsd:
                     if (IPU_MODEL && (IPUSTATUS & ONIPU)) {
                         sim_debug(DEBUG_TRAP, my_dev,
                             "%s: Halt TRAP IPUSTATUS %08x CCW %08x\n",
-			                (IPUSTATUS & ONIPU)? "IPU": "IPU",
+                            (IPUSTATUS & ONIPU)? "IPU": "IPU",
                             IPUSTATUS, CCW);
-
-#ifdef NO_KILL_112422
-                        /* If we have an IPU, and we are on the IPU: destroy the IPU */
-                        if ((CCW & HASIPU) && IPC != 0 && !(IPUSTATUS & ONIPU)) {
-                            kill(IPC->pid[1], SIGKILL); /* destroy the IPU */
-                        }
-#endif
                     }
 /*TEST DIAG*/       reason = STOP_HALT;             /* do halt for now */
                     cpustop = reason;               /* tell IPU our state */
@@ -7033,7 +6882,7 @@ newpsd:
 
                     sim_debug(DEBUG_TRAP, my_dev,
                         "Process %s TRAPME %02x PSD1 %08x PSD2 %08x IPUSTATUS %08x MODE %08x\n",
-			            (IPUSTATUS & ONIPU)? "IPU": "CPU",
+                        (IPUSTATUS & ONIPU)? "IPU": "CPU",
 //FIX                   TRAPME, PSD1, PSD2, IPUSTATUS, MODES);
                         tta, PSD1, PSD2, IPUSTATUS, MODES);
                     /* TODO provide page fault data to word 6 */
@@ -7044,7 +6893,7 @@ newpsd:
             "PAGE TRAP %02x TSTAT %08x LOAD MAPS PSD1 %08x PSD2 %08x IPUSTAT %08x pfault %08x\n",
                             TRAPME, TRAPSTATUS, PSD1, PSD2, IPUSTATUS, pfault);
                     }
-        	        TRAPSTATUS = IPUSTATUS & 0x57;  /* clear all trap status except ipu type */
+                    TRAPSTATUS = IPUSTATUS & 0x57;  /* clear all trap status except ipu type */
                     TRAPME = 0;                     /* to be safe */
                     break;                          /* Go execute the trap */
                 }
@@ -7064,7 +6913,7 @@ newpsd:
         "\n[][][][][][][][][][] HALT [3][][][][][][][][][]\n");
     sim_debug(DEBUG_EXP, my_dev,
         "AT %s: PSD1 %.8x PSD2 %.8x TRAPME %02x IPUSTATUS %08x\n",
-	    (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
+        (IPUSTATUS & ONIPU) ? "IPU" : "CPU",
         PSD1, PSD2, TRAPME, IPUSTATUS);
     for (ix=0; ix<8; ix+=2) {
         sim_debug(DEBUG_EXP, my_dev,
@@ -7075,7 +6924,6 @@ newpsd:
     fflush(sim_deb);
 
 #ifdef DEBUG4IPU
-    DumpStatus();
     DumpHist();
 #endif
     fprintf(stdout, "[][][][][][][][][][] IPU HALT3 [3][][][][][][][][][]\r\n");
@@ -7363,5 +7211,4 @@ t_stat ipu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cpt
     fprintf(st, "   sim> SHOW IPU HISTORY           print IPU history\n");
     return SCPE_OK;
 }
-
 #endif /* USE_IPU_THREAD */
