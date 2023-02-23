@@ -384,15 +384,6 @@ loop:
     sim_debug(DEBUG_CMD, dptr,
         "ec_iocl @%06x read ccw chsa %04x IOCD wd 1 %08x wd 2 %08x SNS %08x\n",
         chp->chan_caw, chp->chan_dev, word1, word2, uptr->SNS);
-//#define DYNAMIC_DEBUG
-#ifdef DYNAMIC_DEBUG
-    if ((word1 == 0x0202f000) && (word2 == 0x0000003C) && (uptr->SNS == 0x0080003e)) {
-        cpu_dev.dctrl |= (DEBUG_INST|DEBUG_XIO);    /* start instruction trace */
-    } else
-    if ((word1 == 0x0202f000) && (word2 == 0x00000040) && (uptr->SNS == 0x0080003e)) {
-        cpu_dev.dctrl &= ~(DEBUG_INST|DEBUG_XIO);   /* stop instruction trace */
-    }
-#endif
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
 
@@ -692,7 +683,7 @@ t_stat ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         // This works most of the time & stops at test 30 with no len errors
 //Was   sim_activate(uptr, 5000);               /* start things off */
         // This works 
-/*jb*/  sim_activate(uptr, 7500);               /* start things off */
+        sim_activate(uptr, 7500);               /* start things off */
         return 0;
     case EC_INCH:                               /* INCH cmd 0x0 */
         cmd = EC_INCH2;                         /* set dummy INCH cmd 0xf0 */
@@ -708,7 +699,6 @@ t_stat ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         /* Fall through */
     case EC_SNS:                                /* Sense 0x04 */
         uptr->CMD |= cmd|EC_BUSY;               /* save cmd */
-//Was M sim_activate(uptr, 100);                /* start things off */
         sim_activate(uptr, 150);                /* start things off */
         return 0;
     }
@@ -732,8 +722,6 @@ t_stat ec_rec_srv(UNIT *uptr)
         if (q > LOOP_MSK)
             q -= (LOOP_MSK + 1);
         if (eth_read(&ec_data.etherface, &ec_data.rec_buff[ec_data.rec_ptr], NULL) > 0) {
-//jb        if (((ec_data.rec_ptr + 1) & LOOP_MSK) == ec_data.xtr_ptr) {
-//jb        if (q > 16) {
             if (q > 716) {
                 ec_data.drop_cnt++;
                 sim_debug(DEBUG_DETAIL, dptr,
@@ -1099,8 +1087,6 @@ wr_end:
             int q = (((ec_data.rec_ptr + 1) & LOOP_MSK) + LOOP_MSK + 1) - ec_data.xtr_ptr;
             if (q >LOOP_MSK)
                 q -= (LOOP_MSK + 1);
-//jb        if (((ec_data.rec_ptr + 1) & LOOP_MSK) == ec_data.xtr_ptr) {
-//jb        if (q > 16) {
             if (q > 716) {
                 ec_data.drop_cnt++;
                 sim_debug(DEBUG_DETAIL, dptr, "ec_srv write packet dropped %d q %d\n",
@@ -1116,7 +1102,6 @@ wr_end:
 
         /* check for internal loopback */
         if ((ec_data.conf[0] & 0x40) == 0) {
-#ifndef NEW_02052021
             /* not internal loopback, user wants to write to network */
             /* check if attached, if not give no carrier and unit exception */
             if ((ec_master_uptr->flags & UNIT_ATT) == 0) {
@@ -1127,7 +1112,6 @@ wr_end:
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_EXPT);
                 break;
             }
-#endif
             /* no loopback, write out the packet */
             if (eth_write(&ec_data.etherface, &ec_data.snd_buff, NULL) != SCPE_OK) {
                 sim_debug(DEBUG_DETAIL, dptr, "ec_srv short packet %d\n", i);
@@ -1151,10 +1135,6 @@ wr_end:
         if (ec_data.xtr_ptr == ec_data.rec_ptr) {
 //          sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv WAIT %04x read %d %d size=%d cnt %d\n",
 //              chsa, ec_data.xtr_ptr, ec_data.rec_ptr, ec_data.conf[9], chp->ccw_count);
-//XX        sim_clock_coschedule(uptr, 1500);   /* continue poll */
-//HH        sim_activate(uptr, 1511);           /* continue poll */
-            /* this is OK for mode 0, 1, 2, 3 */
-//12dec21   sim_activate(uptr, 2511);           /* continue poll */
             /* this is really a 50000 cnt poll by simh */
             sim_clock_coschedule(uptr, 1000);   /* continue poll */
             return SCPE_OK;
@@ -1450,7 +1430,6 @@ wr_end:
                 "ec_startcmd CMD sense excess cnt %02x\n", chp->ccw_count);
             break;
         }
-//020522uptr->SNS &= ~(SNS_CMDREJ|SNS_EQUCHK);  /* clear old status */
         uptr->SNS = 0;                          /* clear old status */
         uptr->SNS &= LMASK;                     /* remove old count */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
@@ -1530,7 +1509,6 @@ void ec_ini(UNIT *uptr, t_bool f)
         sim_debug(DEBUG_EXP, dptr,
             "EC init device %s not attached on unit EC%04X\n",
             dptr->name, GET_UADDR(uptr->CMD));
-//OLD   uptr->SNS |= SNS_NO_CAR;                /* no carrier error */
     }
 }
 
@@ -1542,7 +1520,6 @@ t_stat      ec_rsctrl(UNIT *uptr) {
 
     sim_debug(DEBUG_EXP, dptr,
         "ec_rsctlr chsa %04x cmd = %02x\n", chsa, cmd);
-//  memset(&ec_data.conf[0], 0, sizeof(ec_data.conf));
     ec_data.tx_count = 0;
     ec_data.rx_count = 0;
     ec_data.drop_cnt = 0;
@@ -1684,14 +1661,6 @@ void ec_packet_debug(struct ec_device *ec, const char *action,
             action, arp_op, eth_dst, eth_src, arp_shwaddr, arp_sipaddr, arp_dhwaddr, arp_dipaddr);
         return;
     }
-#ifdef OLDWAY
-    if (ntohs(eth->type) != ETHTYPE_IP) {
-        payload = (uint8 *)&packet->msg[0];
-        len = packet->len;
-        sim_data_trace(&ec_dev, ec_unit, payload, "", len, "", DEBUG_DATA);
-        return;
-    }
-#else
     /* always dump packet */
     payload = (uint8 *)&packet->msg[0];
     len = packet->len;
@@ -1699,7 +1668,6 @@ void ec_packet_debug(struct ec_device *ec, const char *action,
     if (ntohs(eth->type) != ETHTYPE_IP) {
         return;
     }
-#endif
     if (!(ec_dev.dctrl & (DEBUG_TCP|DEBUG_UDP|DEBUG_ICMP)))
         return;
     memcpy(&ipaddr, &ip->ip_src, sizeof(ipaddr));

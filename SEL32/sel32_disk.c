@@ -30,7 +30,7 @@
 
 #if NUM_DEVS_DISK > 0
 
-#define UNIT_DISK   UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
+#define UNIT_DISK   UNIT_ATTABLE|UNIT_DISABLE
 
 extern  uint32  SPAD[];                         /* cpu SPAD memory */
 
@@ -366,19 +366,11 @@ disk_type[] =
 {
     /* Class F Disc Devices */
     /* For MPX */
-#ifndef NOTFORMPX1X
     {"MH040",   5, 192, 20, 407, 411, 0x40},   /* 0  411   40M XXXX */
     {"MH080",   5, 192, 20, 819, 823, 0x40},   /* 1  823   80M 8138 */
     {"MH160",  10, 192, 20, 819, 823, 0x40},   /* 2  823  160M 8148 */
     {"MH300",  19, 192, 20, 819, 823, 0x40},   /* 3  823  300M 8127 */
     {"MH600",  40, 192, 20, 839, 843, 0x40},   /* 4  843  600M 8155 */
-#else
-    {"MH040",   5, 192, 20, 400, 411, 0x40},   /* 0  411   40M XXXX */
-    {"MH080",   5, 192, 20, 800, 823, 0x40},   /* 1  823   80M 8138 */
-    {"MH160",  10, 192, 20, 800, 823, 0x40},   /* 2  823  160M 8148 */
-    {"MH300",  19, 192, 20, 800, 823, 0x40},   /* 3  823  300M 8127 */
-    {"MH600",  40, 192, 20, 800, 843, 0x40},   /* 4  843  600M 8155 */
-#endif
     /* For UTX */
     {"9342",    5, 256, 16, 819, 823, 0x41},   /* 5  823   80M XXXX */
     {"8148",   10, 256, 16, 819, 823, 0x41},   /* 6  823  160M 8148 */
@@ -479,7 +471,7 @@ DEVICE          dda_dev = {
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
     /* ctxt is the DIB pointer */
     &dda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
-    NULL, NULL, &disk_help, NULL, NULL, &disk_description
+    NULL, NULL, &disk_help, NULL, NULL, &disk_description,
 };
 
 #if NUM_DEVS_DISK > 1
@@ -525,7 +517,7 @@ DEVICE          ddb_dev = {
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
     /* ctxt is the DIB pointer */
     &ddb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
-    NULL, NULL, &disk_help, NULL, NULL, &disk_description
+    NULL, NULL, &disk_help, NULL, NULL, &disk_description,
 };
 #endif
 
@@ -953,7 +945,7 @@ loop:
     }
     /* the device processor returned OK (0), so wait for I/O to complete */
     /* nothing happening, so return */
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "disk_iocl @%06x return, chan %04x status %04x count %04x irq_pend %1x\n",
         chp->chan_caw, chan, chp->chan_status, chp->ccw_count, irq_pend);
     return 0;                                   /* good return */
@@ -1044,15 +1036,14 @@ t_stat disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 #ifdef FAST_FOR_UTX
         /* when value was 50, UTX would get a spontainous interrupt */
         /* when value was 30, UTX would get a spontainous interrupt */
-        /* changed to 25 from 30 121420 */
-//utx21a sim_activate(uptr, 20);                /* start things off */
         /* changed to 15 from 20 12/17/2021 to fix utx21a getting */
         /* "panic: ioi: tis_busy - bad cc" during root fsck on boot */
         /* changed back to 20 from 15 12/18/2021 to refix utx21a getting */
         /* "panic: ioi: tis_busy - bad cc" during root fsck on boot */
-        sim_activate(uptr, 20);                 /* start things off */
-        /* when using 500, UTX gets "ioi: sio at 801 failed, cc3, retry=0" */
+//      sim_activate(uptr, 30);                 /* start things off */
+        sim_activate(uptr, 25);                 /* start things off */
 #else
+        /* when using 500, UTX gets "ioi: sio at 801 failed, cc3, retry=0" */
         sim_activate(uptr, 500);                /* start things off */
 #endif
         return SCPE_OK;                         /* good to go */

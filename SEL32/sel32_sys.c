@@ -305,10 +305,10 @@ const char *sim_stop_messages[SCPE_BASE] = {
        "IO device not ready",
        "HALT instruction",
        "Breakpoint",
-       "Unknown Opcode",
+       "IPU Reset request",
        "Invalid instruction",
        "Invalid I/O operation",
-       "Nested indirects exceed limit",
+       "Waiting for CPU to run",
        "I/O Check opcode",
        "Memory management trap during trap",
 };
@@ -534,7 +534,6 @@ t_stat load_tap (FILE *fileref)
  *
  ***********************************************
  *
- * *END
  * *END     Defines the last record of the Initial Configuration Load file.
  *
  ***********************************************
@@ -1263,7 +1262,6 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
     int         l = 4;                      /* default to full words */
     int         rdx = 16;                   /* default radex is hex */
     uint32      num;
-//  uint32      tmp=*val;                   /* for debug */
 
     if (sw & SIM_SW_STOP) {                 /* special processing for step */
         if (PSD[0] & 0x02000000) {          /* bit 6 is base mode */

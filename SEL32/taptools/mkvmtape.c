@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #define MASK24 0x00ffffff
 
@@ -829,6 +831,10 @@ getout:
         int32 n1, n2, nw;
         int32 hc = (1536 + 1) & ~1;             /* make byte count even */
         int blks, rem;
+        struct stat st;                         /* file status */
+        time_t ftime;
+        int status;
+        int days, msec;
 
         p = *argv++;
 //printf("at 4 argc %d argv %s\n", argc, p);
@@ -839,6 +845,7 @@ getout:
             exit(1);
         }
         fnp = p;                                /* get file name pointer */
+        status = stat(p, &st);                  /* get file status */
 
         if (typ != 0xca) {
             /* we need to write the resource descriptor in 2 blks to file */
@@ -902,20 +909,38 @@ getout:
         resdes[2+192]= dirlist[n+10];
         resdes[3+192]= dirlist[n+11];
 
-        resdes[4+192]=flip(0x00003190);         /* RD.DATE creation date */
-        resdes[5+192]=flip(0x0e8c8000);         /* RD.TIME creation time */
+        days = st.st_ctime/86400 + 3653;         /* days from 1/1/1960 */
+        msec = st.st_ctime%86400 * 10000;        /* millsecs in day */
+//      resdes[4+192]=flip(0x00003190);         /* RD.DATE creation date */
+//      resdes[5+192]=flip(0x0e8c8000);         /* RD.TIME creation time */
+        resdes[4+192]=flip(days);               /* RD.DATE creation date */
+        resdes[5+192]=flip(msec);               /* RD.TIME creation time */
         resdes[6+192]=flip(0x000003c0);         /* RD.DOFF abs blk of res des */
         resdes[7+192]=flip(0x0000000a);         /* RD.RDFLG / RD.RTYPE resource type, perm file */
 
-        resdes[8+192]=flip(0x000029cf);         /* RD.CRDAT creation date */
-        resdes[9+192]=flip(0x1dd8e074);         /* RD.CRTIM creation time */
+//      resdes[8+192]=flip(0x000029cf);         /* RD.CRDAT creation date */
+//      resdes[9+192]=flip(0x1dd8e074);         /* RD.CRTIM creation time */
+        resdes[9+192]=flip(days);               /* RD.CRDAT creation date */
+        resdes[9+192]=flip(msec);               /* RD.CRTIM creation time */
         //202 10+192 RD.XPDAT
         //203 11+192 RD.XPTIM
 
-        //204 12+192 RD.RDDAT
-        //205 13+192 RD.RDTIM
-        resdes[14+192]=flip(0x000029cf);        /* RD.CHDAT last chge date */
-        resdes[15+192]=flip(0x1dd8e074);        /* RD.CHTIM last chge time */
+        //204 12+192 RD.RDDAT                   /* access date */
+        //205 13+192 RD.RDTIM                   /* access time */
+        days = st.st_atime/86400 + 3653;        /* days from 1/1/1960 */
+        msec = st.st_atime%86400 * 10000;       /* millsecs in day */
+        resdes[12+192]=flip(days);              /* RD.RDDAT last access date */
+        resdes[13+192]=flip(msec);              /* RD.RDTIM last access time */
+
+//      resdes[14+192]=flip(0x000029cf);        /* RD.CHDAT last chge date */
+//      resdes[15+192]=flip(0x1dd8e074);        /* RD.CHTIM last chge time */
+        days = st.st_mtime/86400 + 3653;        /* days from 1/1/1960 */
+        msec = st.st_mtime%86400 * 10000;       /* millsecs in day */
+        resdes[14+192]=flip(days);              /* RD.CHDAT last chge date */
+        resdes[15+192]=flip(msec);              /* RD.CHTIM last chge time */
+
+        days = st.st_atime/86400 + 3653;        /* days from 1/1/1960 */
+        msec = st.st_atime%86400 * 10000;       /* millsecs in day */
 
         resdes[16+192]=flip(0x00003190);        /* RD.SVDAT last save date */
         resdes[17+192]=flip(0x0e8c8000);        /* RD.SVTIM last save time */

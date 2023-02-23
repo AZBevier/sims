@@ -288,14 +288,14 @@ MTAB                mt_mod[] = {
 
 UNIT                mta_unit[] = {
     /* Unit data layout for MT devices */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1000)},       /* 0 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1001)},       /* 1 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1002)},       /* 2 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1003)},       /* 3 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1004)},       /* 4 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1005)},       /* 5 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1006)},       /* 6 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1007)},       /* 7 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1000)},       /* 0 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1001)},       /* 1 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1002)},       /* 2 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1003)},       /* 3 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1004)},       /* 4 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1005)},       /* 5 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1006)},       /* 6 */
+    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1007)},       /* 7 */
 };
 
 /* channel program information */
@@ -337,14 +337,14 @@ DEVICE          mta_dev = {
 CHANP           mtb_chp[NUM_UNITS_MT] = {0};
 
 UNIT            mtb_unit[] = {
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1800)},       /* 0 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1801)},       /* 1 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1802)},       /* 2 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1803)},       /* 3 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1804)},       /* 4 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1805)},       /* 5 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1806)},       /* 6 */
-    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1807)},       /* 7 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1800)},       /* 0 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1801)},       /* 1 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1802)},       /* 2 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1803)},       /* 3 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1804)},       /* 4 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1805)},       /* 5 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1806)},       /* 6 */
+    {UDATA(&mt_srv, UNIT_MT|0), 0, UNIT_ADDR(0x1807)},       /* 7 */
 };
 
 /* device information block */
@@ -1251,7 +1251,7 @@ rewrite:
 #endif
             uptr->SNS &= ~(SNS_LOAD|SNS_EOT|SNS_FMRKDT);    /* reset BOT, EOT, EOF */
 #ifdef NBSF
-            /* using the backspace file call does not work with MPX */
+            /* using the backspace file call on simh does not work with MPX */
             r = sim_tape_spfiler(uptr, skip, &reclen);
             uptr->POS++;
 #else
