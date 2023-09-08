@@ -449,7 +449,7 @@ t_stat lpr_srv(UNIT *uptr) {
 
     /* Copy next byte from users buffer */
     while ((uptr->CMD & LPR_FULL) == 0) {   /* copy in a char if not full */
-        if(chan_read_byte(chsa, &lpr_data[u].lbuff[uptr->CBP])) {
+        if (chan_read_byte(chsa, &lpr_data[u].lbuff[uptr->CBP])) {
             uptr->CMD |= LPR_FULL;          /* end of buffer or error */
             break;                          /* done reading */
         } else {
@@ -588,7 +588,7 @@ t_stat lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     if (uptr == NULL)
         return SCPE_IERR;
     i = 0;
-    while(*cptr != '\0') {
+    while (*cptr != '\0') {
         if (*cptr < '0' || *cptr > '9')
             return SCPE_ARG;
         i = (i * 10) + (*cptr++) - '0';

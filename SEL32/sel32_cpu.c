@@ -518,6 +518,7 @@ static void DumpHist()
 }
 #endif
 
+#ifndef CPUONLY
 #ifdef USE_POSIX_SEM
 LOCAL void set_simsem()
 {
@@ -561,6 +562,7 @@ LOCAL void unlock_mutex()
     }
 }
 #endif
+#endif /* CPUONLY */
 
 #ifdef NOT_USED
 /* this function is used to extract mode bits from PSD 1 & 2 */

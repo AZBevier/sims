@@ -112,15 +112,18 @@ ifneq (,${GREP_OPTIONS})
   $(error 1)
 endif
 ifneq ($(findstring Windows,${OS}),)
-  ifeq ($(findstring .exe,${SHELL}),.exe)
-    # MinGW
-    WIN32 := 1
-    # Tests don't run under MinGW
-    TESTS := 0
-  else # Msys or cygwin
-    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
-      $(info *** This makefile can not be used with the Msys bash shell)
-      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+  # Cygwin can return SHELL := C:/cygwin/bin/sh.exe  cygwin is OK & NOT WIN32
+  ifeq ($(findstring /cygwin/,$(SHELL)),)
+    ifeq ($(findstring .exe,${SHELL}),.exe)
+      # MinGW
+      WIN32 := 1
+      # Tests don't run under MinGW
+      TESTS := 0
+    else # Msys or cygwin
+      ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+        $(info *** This makefile can not be used with the Msys bash shell)
+        $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+      endif
     endif
   endif
 endif
@@ -159,6 +162,10 @@ ifneq (3,${SIM_MAJOR})
   endif
   # building the PDP6, KA10 or KI10 needs video support
   ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
+    VIDEO_USEFUL = true
+  endif
+  # building the AltairZ80 could use video support
+  ifneq (,$(findstring altairz80,${MAKECMDGOALS}))
     VIDEO_USEFUL = true
   endif
 endif
@@ -203,15 +210,17 @@ ifneq ($(NOVIDEO),)
   VIDEO_USEFUL =
 endif
 ifneq ($(findstring Windows,${OS}),)
-  ifeq ($(findstring .exe,${SHELL}),.exe)
-    # MinGW
-    WIN32 := 1
-    # Tests don't run under MinGW
-    TESTS := 0
-  else # Msys or cygwin
-    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
-      $(info *** This makefile can not be used with the Msys bash shell)
-      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+  ifeq ($(findstring /cygwin/,$(SHELL)),)
+    ifeq ($(findstring .exe,${SHELL}),.exe)
+      # MinGW
+      WIN32 := 1
+      # Tests don't run under MinGW
+      TESTS := 0
+    else # Msys or cygwin
+      ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+        $(info *** This makefile can not be used with the Msys bash shell)
+        $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+      endif
     endif
   endif
 endif
@@ -688,11 +697,11 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       endif
     endif
   endif
+  ifeq (cygwin,$(OSTYPE))
+    LIBEXTSAVE := ${LIBEXT}
+    LIBEXT = dll.a
+  endif
   ifneq (,$(VIDEO_USEFUL))
-    ifeq (cygwin,$(OSTYPE))
-      LIBEXTSAVE := ${LIBEXT}
-      LIBEXT = dll.a
-    endif
     ifneq (,$(call find_include,SDL2/SDL))
       ifneq (,$(call find_lib,SDL2))
         ifneq (,$(shell which sdl2-config))
@@ -773,14 +782,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
     endif
-    ifeq (cygwin,$(OSTYPE))
-      LIBEXT = $(LIBEXTSAVE)
-      LIBPATH += /usr/lib/w32api
-      ifneq (,$(call find_lib,winmm))
-        OS_CCDEFS += -DHAVE_WINMM
-        OS_LDFLAGS += -lwinmm
-      endif
-    endif
     ifeq (,$(findstring HAVE_LIBSDL,$(VIDEO_CCDEFS)))
       $(info *** Info ***)
       $(info *** Info *** The simulator$(BUILD_MULTIPLE) you are building could provide more functionality)
@@ -820,6 +821,14 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
       $(info *** Info ***)
+    endif
+  endif
+  ifeq (cygwin,$(OSTYPE))
+    LIBEXT = $(LIBEXTSAVE)
+    LIBPATH += /usr/lib/w32api
+    ifneq (,$(call find_lib,winmm))
+      OS_CCDEFS += -DHAVE_WINMM
+      OS_LDFLAGS += -lwinmm
     endif
   endif
   ifneq (,$(NETWORK_USEFUL))
@@ -1303,9 +1312,9 @@ endif
 ifneq (,$(UNSUPPORTED_BUILD))
   CFLAGS_GIT += -DSIM_BUILD=Unsupported=$(UNSUPPORTED_BUILD)
 endif
-OPTIMIZE ?= -O2
+OPTIMIZE ?= -O2 -DNDEBUG=1
 ifneq ($(DEBUG),)
-  CFLAGS_G = -g -ggdb -g3
+  CFLAGS_G = -g -ggdb -g3 -D_DEBUG=1
   CFLAGS_O = -O0
   BUILD_FEATURES = - debugging support
   LTO =
@@ -1429,6 +1438,11 @@ PDP1 = ${PDP1D}/pdp1_lp.c ${PDP1D}/pdp1_cpu.c ${PDP1D}/pdp1_stddev.c \
 	${PDP1D}/pdp1_clk.c ${PDP1D}/pdp1_dcs.c ${PDP1D}/pdp1_dpy.c ${DISPLAYL}
 PDP1_OPT = -I ${PDP1D} ${DISPLAY_OPT} $(PDP1_DISPLAY_OPT)
 
+
+ND100D = ${SIMHD}/ND100
+ND100 = ${ND100D}/nd100_sys.c ${ND100D}/nd100_cpu.c ${ND100D}/nd100_floppy.c \
+	${ND100D}/nd100_stddev.c ${ND100D}/nd100_mm.c
+ND100_OPT = -I ${ND100D}
 
 NOVAD = ${SIMHD}/NOVA
 NOVA = ${NOVAD}/nova_sys.c ${NOVAD}/nova_cpu.c ${NOVAD}/nova_dkp.c \
@@ -1600,7 +1614,7 @@ VAX730 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
 	${VAXD}/vax730_stddev.c ${VAXD}/vax730_sys.c \
 	${VAXD}/vax730_mem.c ${VAXD}/vax730_uba.c ${VAXD}/vax730_rb.c \
-	${VAXD}/vax730_syslist.c \
+	${VAXD}/vax_uw.c ${VAXD}/vax730_syslist.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
 	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
@@ -1615,7 +1629,7 @@ VAX750 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
 	${VAXD}/vax750_stddev.c ${VAXD}/vax750_cmi.c \
 	${VAXD}/vax750_mem.c ${VAXD}/vax750_uba.c ${VAXD}/vax7x0_mba.c \
-	${VAXD}/vax750_syslist.c \
+	${VAXD}/vax_uw.c ${VAXD}/vax750_syslist.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
 	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
@@ -1631,7 +1645,7 @@ VAX780 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
 	${VAXD}/vax780_stddev.c ${VAXD}/vax780_sbi.c \
 	${VAXD}/vax780_mem.c ${VAXD}/vax780_uba.c ${VAXD}/vax7x0_mba.c \
-	${VAXD}/vax780_fload.c ${VAXD}/vax780_syslist.c \
+	${VAXD}/vax780_fload.c 	${VAXD}/vax_uw.c ${VAXD}/vax780_syslist.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
 	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
@@ -1870,6 +1884,8 @@ ALTAIR_OPT = -I ${ALTAIRD}
 
 ALTAIRZ80D = ${SIMHD}/AltairZ80
 ALTAIRZ80 = ${ALTAIRZ80D}/altairz80_cpu.c ${ALTAIRZ80D}/altairz80_cpu_nommu.c \
+	${ALTAIRZ80D}/sol20.c \
+	${ALTAIRZ80D}/s100_vdm1.c \
 	${ALTAIRZ80D}/mmd.c \
 	${ALTAIRZ80D}/s100_dj2d.c \
 	${ALTAIRZ80D}/s100_djhdc.c \
@@ -1880,6 +1896,7 @@ ALTAIRZ80 = ${ALTAIRZ80D}/altairz80_cpu.c ${ALTAIRZ80D}/altairz80_cpu_nommu.c \
 	${ALTAIRZ80D}/flashwriter2.c ${ALTAIRZ80D}/i86_decode.c \
 	${ALTAIRZ80D}/i86_ops.c ${ALTAIRZ80D}/i86_prim_ops.c \
 	${ALTAIRZ80D}/i8272.c ${ALTAIRZ80D}/insnsd.c ${ALTAIRZ80D}/altairz80_mhdsk.c \
+	${ALTAIRZ80D}/ibc.c ${ALTAIRZ80D}/ibc_mcc_hdc.c ${ALTAIRZ80D}/ibc_smd_hdc.c \
 	${ALTAIRZ80D}/mfdc.c ${ALTAIRZ80D}/n8vem.c ${ALTAIRZ80D}/vfdhd.c \
 	${ALTAIRZ80D}/s100_disk1a.c ${ALTAIRZ80D}/s100_disk2.c ${ALTAIRZ80D}/s100_disk3.c \
 	${ALTAIRZ80D}/s100_fif.c ${ALTAIRZ80D}/s100_mdriveh.c \
@@ -1897,7 +1914,7 @@ ALTAIRZ80 = ${ALTAIRZ80D}/altairz80_cpu.c ${ALTAIRZ80D}/altairz80_cpu_nommu.c \
 	${ALTAIRZ80D}/m68k/m68kopac.c ${ALTAIRZ80D}/m68k/m68kopdm.c \
 	${ALTAIRZ80D}/m68k/softfloat/softfloat.c \
 	${ALTAIRZ80D}/m68k/m68kopnz.c ${ALTAIRZ80D}/m68k/m68kops.c ${ALTAIRZ80D}/m68ksim.c
-ALTAIRZ80_OPT = -I ${ALTAIRZ80D}
+ALTAIRZ80_OPT = -I ${ALTAIRZ80D} -DUSE_SIM_VIDEO ${VIDEO_CCDEFS} $(VIDEO_LDFLAGS)
 
 
 GRID = ${SIMHD}/GRI
@@ -2176,15 +2193,15 @@ PDQ3_OPT = -I ${PDQ3D}
 #	microvax2000 infoserver100 infoserver150vxt microvax3100 microvax3100e \
 #	vaxstation3100m30 vaxstation3100m38 vaxstation3100m76 vaxstation4000m60 \
 #	microvax3100m80 vaxstation4000vlc infoserver1000 \
-#	nova eclipse hp2100 hp3000 i1401 i1620 s3 altair altairz80 gri \
+#	nd100 nova eclipse hp2100 hp3000 i1401 i1620 s3 altair altairz80 gri \
 #	i7094 ibm1130 id16 id32 sds lgp h316 cdc1700 \
 #	swtp6800mp-a swtp6800mp-a2 tx-0 ssem b5500 intel-mds \
 #	scelbi 3b2 3b2-700 i701 i704 i7010 i7070 i7080 i7090 \
 #	sigma uc15 pdp10-ka pdp10-ki pdp10-kl pdp10-ks pdp6 i650 \
-#	imlac tt2500 sel32
-all = sel32
+#	imlac tt2500 sel32 
 
-all : ${ALL}
+#all : ${ALL}
+all : sel32
 
 EXPERIMENTAL = alpha pdq3 sage
 
@@ -2508,6 +2525,15 @@ ${BIN}vax8600${EXE} : ${VAX8600} ${SIM} ${BUILD_ROMS}
 	${CC} ${VAX8600} ${SIM} ${VAX8600_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${VAXD},vax-diag))
 	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+nd100 : ${BIN}nd100${EXE}
+
+${BIN}nd100${EXE} : ${ND100} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ND100} ${SIM} ${ND100_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ND100D},nd100))
+	$@ $(call find_test,${ND100D},nd100) ${TEST_ARG}
 endif
 
 nova : ${BIN}nova${EXE}

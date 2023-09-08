@@ -38,14 +38,11 @@
 
 /* define CPUONLY to run without IPU */
 //#define CPUONLY                         /* run on CPU only */
+/* undefine CPUONLY to run with IPU */
 #undef CPUONLY                          /* run with cpu/ipu on system */
 
-/* undefine CPUONLY to run with IPU */
 /* define USE_IPU_THREAD to use IPU thread code instead of fork code */
-/* define USE_POSIX_SEM for POSIX semaphores otherwise use pthread mutex */
-/* forked mode IPU must only use semaphores */
 #ifndef CPUONLY
-//#define USE_POSIX_SEM                   /* use POSIX semaphores, else pthread mutex */
 //#undef  USE_IPU_THREAD                  /* run IPU as a forked sel32 */
 #define USE_IPU_THREAD                  /* run IPU in sel32_ipu.c thread */
 #endif
@@ -55,10 +52,15 @@
 #define DEFINE_IPU_MODELS               /* IPU devices must be define for IPU */
 #ifndef USE_IPU_THREAD
 #define USE_POSIX_SEM                   /* forked mode IPU can only use semaphores */
+/* include signal.h when using fork for 2nd SIMH */
+#include <signal.h>
+#else
+#undef USE_POSIX_SEM                    /* make sure no POSIX semaphores for IPU thread code */
 #endif
-#else /* CPUONLY */
+#else /* NOT CPUONLY */
 #undef USE_IPU_THREAD                   /* make sure IPU code undefined for CPUONLY */
 #undef DEFINE_IPU_MODELS                /* make sure IPU models undefine too */
+#undef USE_POSIX_SEM                    /* make sure no POSIX semaphores for CPU only */
 #endif /* CPU_ONLY */
 
 /* use correct variable type for IPU thread */

@@ -2159,7 +2159,6 @@ iha_error:
 
             /* see if we are done reading data */
             if (test_write_byte_end(chsa)) {
-                /* EOM reached, abort */
                 sim_debug(DEBUG_CMD, dptr,
                     "HSDP Read complete for read from disk @ %04x/%02x/%02x\n",
                     STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
@@ -2402,7 +2401,7 @@ iha_error:
 #ifdef FAST_FOR_UTX
             sim_activate(uptr, 15);             /* keep writing */
 #else
-            sim_activate(uptr, 150);            /* wait to read next sector */
+            sim_activate(uptr, 150);            /* wait to write next sector */
 #endif
             break;
          }
@@ -2926,7 +2925,7 @@ t_stat hsdp_reset(DEVICE *dptr)
 {
     int     cn, unit;
 
-    for(unit=0; unit < NUM_UNITS_HSDP; unit++) {
+    for (unit=0; unit < NUM_UNITS_HSDP; unit++) {
         for (cn=0; cn<TRK_CACHE; cn++) {
             tkl_label[unit].tkl[cn].track = 0;
             tkl_label[unit].tkl[cn].age = 0;

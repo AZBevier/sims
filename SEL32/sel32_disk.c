@@ -1040,8 +1040,7 @@ t_stat disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         /* "panic: ioi: tis_busy - bad cc" during root fsck on boot */
         /* changed back to 20 from 15 12/18/2021 to refix utx21a getting */
         /* "panic: ioi: tis_busy - bad cc" during root fsck on boot */
-//      sim_activate(uptr, 30);                 /* start things off */
-        sim_activate(uptr, 25);                 /* start things off */
+        sim_activate(uptr, 30);                 /* start things off */
 #else
         /* when using 500, UTX gets "ioi: sio at 801 failed, cc3, retry=0" */
         sim_activate(uptr, 500);                /* start things off */
@@ -1661,7 +1660,7 @@ iha_error:
 #ifdef FAST_FOR_UTX
             sim_activate(uptr, 15);             /* start us off */
 #else
-            sim_activate(uptr, 400+diff);       /* start us off */
+            sim_activate(uptr, 200+diff);       /* start us off */
 #endif
         } else {
             /* we are on cylinder/track/sector, so go on */
@@ -1829,7 +1828,7 @@ iha_error:
                 "DISK READ starting CMD %08x chsa %04x buffer %06x count %04x\n",
                 uptr->CMD, chsa, chp->ccw_addr, chp->ccw_count);
         }
-
+domore_read:
         if (uptr->CMD & DSK_READING) {          /* see if we are reading data */
             /* get file offset in sectors */
             tstart = STAR2SEC(uptr->CHS, SPT(type), SPC(type));
@@ -2042,11 +2041,14 @@ if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
             sim_debug(DEBUG_CMD, dptr,
                 "DISK sector read complete, %x bytes to go from diskfile %04x/%02x/%02x\n",
                 chp->ccw_count, STAR2CYL(uptr->CHS), ((uptr->CHS) >> 8)&0xff, (uptr->CHS&0xff));
+#ifdef WRITE_ALL_AT_ONCE
 #ifdef FAST_FOR_UTX
             sim_activate(uptr, 10);             /* wait to read next sector */
 #else
             sim_activate(uptr, 300);            /* wait to read next sector */
 #endif
+#endif
+            goto domore_read;                   /* keep reading */
             break;
         }
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
@@ -2071,6 +2073,7 @@ if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
             }
             uptr->CMD |= DSK_WRITING;           /* write to disk starting */
         }
+domore_write:
         if (uptr->CMD & DSK_WRITING) {          /* see if we are writing data */
             /* get file offset in sectors */
             tstart = STAR2SEC(uptr->CHS, SPT(type), SPC(type));
@@ -2255,11 +2258,14 @@ if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
                 break;
             }
 
+#ifdef WRITE_ALL_AT_ONCE
 #ifdef FAST_FOR_UTX
-            sim_activate(uptr, 15);             /* wait to read next sector */
+            sim_activate(uptr, 15);             /* wait to write next sector */
 #else
-            sim_activate(uptr, 300);            /* wait to read next sector */
+            sim_activate(uptr, 300);            /* wait to write next sector */
 #endif
+#endif
+            goto domore_write;                  /* keep writing */
             break;
          }
          uptr->CMD &= LMASK;                    /* remove old status bits & cmd */
@@ -2702,7 +2708,7 @@ t_stat disk_reset(DEVICE *dptr)
 {
     int     cn, unit;
 
-    for(unit=0; unit < NUM_UNITS_DISK; unit++) {
+    for (unit=0; unit < NUM_UNITS_DISK; unit++) {
         for (cn=0; cn<TRK_CACHE; cn++) {
             tkl_label[unit].tkl[cn].track = 0;
             tkl_label[unit].tkl[cn].age = 0;

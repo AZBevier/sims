@@ -349,8 +349,6 @@ t_stat con_srvo(UNIT *uptr) {
             unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4, mema, M[mema>>2]);
 
         /* now call set_inch() function to write and test inch buffer addresses */
-        /* 1-256 wd buffer is provided for 128 status dbl words */
-//BAD   tstart = set_inch(uptr, mema, 128); /* new address & 128 entries */
         tstart = set_inch(uptr, mema, 1); /* new address & 1 entry */
         if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
@@ -362,7 +360,8 @@ t_stat con_srvo(UNIT *uptr) {
             break;
         }
         sim_debug(DEBUG_CMD, dptr,
-            "con_srvo INCH CMD %08x chsa %04x len %02x inch %06x in2 %06x\n", uptr->CMD, chsa, len, mema, M[mema>>2]);
+            "con_srvo INCH CMD %08x chsa %04x len %02x inch %06x in2 %06x\n",
+            uptr->CMD, chsa, len, mema, M[mema>>2]);
         /* WARNING, if SNS_DEVEND is not set, diags fail by looping in CON diag */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
@@ -431,7 +430,6 @@ t_stat con_srvi(UNIT *uptr) {
             unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4, mema, M[mema>>2]);
 
         /* now call set_inch() function to write and test inch buffer addresses */
-//BAD   tstart = set_inch(uptr, mema, 128); /* new address & 128 entries */
         tstart = set_inch(uptr, mema, 1); /* new address & 1 entry */
         if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
@@ -445,7 +443,8 @@ t_stat con_srvi(UNIT *uptr) {
         con_data[unit].incnt = 0;           /* buffer empty */
         uptr->u4 = 0;                       /* no I/O yet */
         sim_debug(DEBUG_CMD, dptr,
-            "con_srvi INCH CMD %08x chsa %04x len %02x inch %06x in2 %06x\n", uptr->CMD, chsa, len, mema, M[mema>>2]);
+            "con_srvi INCH CMD %08x chsa %04x len %02x inch %06x in2 %06x\n",
+            uptr->CMD, chsa, len, mema, M[mema>>2]);
         /* WARNING, if SNS_DEVEND is not set, diags fail by looping in CON diag */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         /* drop through to poll input */
@@ -464,9 +463,6 @@ t_stat con_srvi(UNIT *uptr) {
     case CON_RD:        /* 0x02 */          /* read from device */
     case CON_RDBWD:     /* 0x0c */          /* Read Backward */
 
-#ifdef OLD_WAY
-do_read:
-#endif
         if ((uptr->u4 != con_data[unit].incnt) ||  /* input empty */
             (uptr->CMD & CON_INPUT)) {      /* input waiting? */
             ch = con_data[unit].ibuff[uptr->u4]; /* get char from read buffer */
@@ -552,10 +548,8 @@ do_read:
                 atbuf = (ch)<<8;            /* start anew */
                 uptr->CMD |= CON_ATAT;      /* show getting @ */
             }
-#ifndef TEST4MPX
             if (ch == '\n')                 /* convert newline */
                 ch = '\r';                  /* make newline into carriage return */ 
-#endif
             if (isprint(ch))
                 sim_debug(DEBUG_CMD, dptr,
                 "con_srvi handle readch unit %02x: CMD %08x read %02x [%c] u4 %02x incnt %02x r %x\n",
@@ -581,12 +575,9 @@ do_read:
                 sim_debug(DEBUG_CMD, dptr,
                 "con_srvi readch unit %02x: CMD %08x read %02x u4 %02x incnt %02x\n",
                 unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt);
-#ifndef OLD_WAY
+
             sim_activate(uptr, 500);        /* do this again */
             return SCPE_OK;
-#else
-            goto do_read;                   /* go send char to user */
-#endif
         }
         /* not looking for input, look for attn or wakeup */
         if (ch == '?') {

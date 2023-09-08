@@ -44,6 +44,22 @@
 # If debugging is desired, then GNU make can be invoked with
 # DEBUG=1 on the command line.
 #
+# When building compiler optimized binaries with the gcc or clang 
+# compilers, invoking GNU make with LTO=1 on the command line will 
+# cause the build to use Link Time Optimization to maximally optimize 
+# the results.  Link Time Optimization can report errors which aren't 
+# otherwise detected and will also take significantly longer to 
+# complete.  Additionally, non debug builds default to build with an
+# optimization level of -O2.  This optimization level can be changed 
+# by invoking GNU OPTIMIZE=-O3 (or whatever optimize value you want) 
+# on the command line if desired.
+#
+# The default setup will fail simulator build(s) if the compile 
+# produces any warnings.  These should be cleaned up before new 
+# or changd code is accepted into the code base.  This option 
+# can be overridden if GNU make is invoked with WARNINGS=ALLOWED
+# on the command line.
+#
 # The default build will run per simulator tests if they are 
 # available.  If building without running tests is desired, 
 # then GNU make should be invoked with TESTS=0 on the command 
@@ -95,13 +111,36 @@ ifneq (,${GREP_OPTIONS})
   $(info unset the GREP_OPTIONS environment variable to use this makefile)
   $(error 1)
 endif
-ifeq (old,$(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ if ($$3 < "3.81") {print "old"} }'))
-  GMAKE_VERSION = $(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ print $$3 }')
+ifneq ($(findstring Windows,${OS}),)
+  # Cygwin can return SHELL := C:/cygwin/bin/sh.exe  cygwin is OK & NOT WIN32
+  ifeq ($(findstring /cygwin/,$(SHELL)),)
+    ifeq ($(findstring .exe,${SHELL}),.exe)
+      # MinGW
+      WIN32 := 1
+      # Tests don't run under MinGW
+      TESTS := 0
+    else # Msys or cygwin
+      ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+        $(info *** This makefile can not be used with the Msys bash shell)
+        $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+      endif
+    endif
+  endif
+endif
+ifeq ($(WIN32),)
+##  SIM_MAJOR=$(shell grep SIM_MAJOR sim_rev.h | awk '{ print $$3 }')
+  SIM_MAJOR=$(shell grep SIM_MAJOR ../sim_rev.h | awk '{ print $$3 }')
+  GMAKE_VERSION = $(shell $(MAKE) --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ print $$3 }')
+  OLD = $(shell echo $(GMAKE_VERSION) | awk '{ if ($$1 < "3.81") {print "old"} }')
+else
+  SIM_MAJOR=$(shell for /F "tokens=3" %%i in ('findstr /c:"SIM_MAJOR" sim_rev.h') do echo %%i)
+  GMAKE_VERSION = $(shell for /F "tokens=3" %%i in ('$(MAKE) --version ^| findstr /c:"GNU Make"') do echo %%i)
+  OLD = $(shell cmd /e:on /c "if $(GMAKE_VERSION) LSS 3.81 echo old")
+endif
+ifeq ($(OLD),old)
   $(warning *** Warning *** GNU Make Version $(GMAKE_VERSION) is too old to)
   $(warning *** Warning *** fully process this makefile)
 endif
-##SIM_MAJOR=$(shell grep SIM_MAJOR sim_rev.h | awk '{ print $$3 }')
-SIM_MAJOR=$(shell grep SIM_MAJOR ../sim_rev.h | awk '{ print $$3 }')
 BUILD_SINGLE := ${MAKECMDGOALS} $(BLANK_SUFFIX)
 BUILD_MULTIPLE_VERB = is
 # building the pdp1, pdp11, tx-0, or any microvax simulator could use video support
@@ -126,6 +165,14 @@ ifneq (3,${SIM_MAJOR})
   ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
     VIDEO_USEFUL = true
   endif
+  # building the AltairZ80 could use video support
+  ifneq (,$(findstring altairz80,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+  endif
+endif
+# building the SEL32 networking can be used
+ifneq (,$(findstring sel32,${MAKECMDGOALS}))
+  NETWORK_USEFUL = true
 endif
 # building the PDP-7 needs video support
 ifneq (,$(findstring pdp7,${MAKECMDGOALS}))
@@ -164,17 +211,23 @@ ifneq ($(NOVIDEO),)
   VIDEO_USEFUL =
 endif
 ifneq ($(findstring Windows,${OS}),)
-  ifeq ($(findstring .exe,${SHELL}),.exe)
-    # MinGW
-    WIN32 := 1
-    # Tests don't run under MinGW
-    TESTS := 0
-  else # Msys or cygwin
-    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
-      $(info *** This makefile can not be used with the Msys bash shell)
-      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+  ifeq ($(findstring /cygwin/,$(SHELL)),)
+    ifeq ($(findstring .exe,${SHELL}),.exe)
+      # MinGW
+      WIN32 := 1
+      # Tests don't run under MinGW
+      TESTS := 0
+    else # Msys or cygwin
+      ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+        $(info *** This makefile can not be used with the Msys bash shell)
+        $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+      endif
     endif
   endif
+endif
+ifeq (3,${SIM_MAJOR})
+  # simh v3 DOES not have any video support
+  VIDEO_USEFUL =
 endif
 
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
@@ -254,6 +307,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
     else
+      OS_CCDEFS += $(if $(findstring ALLOWED,$(WARNINGS)),,-Werror)
       ifeq (,$(findstring ++,${GCC}))
         CC_STD = -std=gnu99
       else
@@ -261,6 +315,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       endif
     endif
   else
+    OS_CCDEFS += $(if $(findstring ALLOWED,$(WARNINGS)),,-Werror)
     ifeq (Apple,$(shell ${GCC} -v /dev/null 2>&1 | grep 'Apple' | awk '{ print $$1 }'))
       COMPILER_NAME = $(shell ${GCC} -v /dev/null 2>&1 | grep 'Apple' | awk '{ print $$1 " " $$2 " " $$3 " " $$4 }')
       CLANG_VERSION = $(word 4,$(COMPILER_NAME))
@@ -480,7 +535,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
                 endif
                 OS_CCDEFS += -D_HPUX_SOURCE -D_LARGEFILE64_SOURCE
                 OS_LDFLAGS += -Wl,+b:
-                NO_LTO = 1
+                override LTO =
               else
                 LIBEXT = a
               endif
@@ -504,14 +559,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
     endif
     export CPATH = $(subst $() $(),:,$(INCPATH))
     export LIBRARY_PATH = $(subst $() $(),:,$(LIBPATH))
-    # Some gcc versions don't support LTO, so only use LTO when the compiler is known to support it
-    ifeq (,$(NO_LTO))
-      ifneq (,$(GCC_VERSION))
-        ifeq (,$(shell ${GCC} -v /dev/null 2>&1 | grep '\-\-enable-lto'))
-          LTO_EXCLUDE_VERSIONS += $(GCC_VERSION)
-        endif
-      endif
-    endif
   endif
   $(info lib paths are: ${LIBPATH})
   $(info include paths are: ${INCPATH})
@@ -651,19 +698,15 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       endif
     endif
   endif
+  ifeq (cygwin,$(OSTYPE))
+    LIBEXTSAVE := ${LIBEXT}
+    LIBEXT = dll.a
+  endif
   ifneq (,$(VIDEO_USEFUL))
-    ifeq (cygwin,$(OSTYPE))
-      LIBEXTSAVE := ${LIBEXT}
-      LIBEXT = dll.a
-    endif
     ifneq (,$(call find_include,SDL2/SDL))
       ifneq (,$(call find_lib,SDL2))
-        ifneq (,$(findstring Haiku,$(OSTYPE)))
-          ifneq (,$(shell which sdl2-config))
-            SDLX_CONFIG = sdl2-config
-          endif
-        else
-          SDLX_CONFIG = $(realpath $(dir $(call find_include,SDL2/SDL))../../bin/sdl2-config)
+        ifneq (,$(shell which sdl2-config))
+          SDLX_CONFIG = sdl2-config
         endif
         ifneq (,$(SDLX_CONFIG))
           VIDEO_CCDEFS += -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags`
@@ -673,18 +716,72 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAYVT = ${DISPLAYD}/vt11.c
           DISPLAY340 = ${DISPLAYD}/type340.c
           DISPLAYNG = ${DISPLAYD}/ng.c
-          DISPLAYIMLAC = ${DISPLAYD}/imlac.c
-          DISPLAYTT2500 = ${DISPLAYD}/tt2500.c
+          DISPLAYIII = ${DISPLAYD}/iii.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
           $(info using libSDL2: $(call find_include,SDL2/SDL))
           ifeq (Darwin,$(OSTYPE))
             VIDEO_CCDEFS += -DSDL_MAIN_AVAILABLE
           endif
+          ifneq (,$(and $(BESM6_BUILD), $(or $(and $(call find_include,SDL2/SDL_ttf),$(call find_lib,SDL2_ttf)), $(and $(call find_include,SDL/SDL_ttf),$(call find_lib,SDL_ttf)))))
+            FONTPATH += /usr/share/fonts /Library/Fonts /usr/lib/jvm /System/Library/Frameworks/JavaVM.framework/Versions /System/Library/Fonts C:/Windows/Fonts
+            FONTPATH := $(dir $(foreach dir,$(strip $(FONTPATH)),$(wildcard $(dir)/.)))
+            FONTNAME += DejaVuSans.ttf LucidaSansRegular.ttf FreeSans.ttf AppleGothic.ttf tahoma.ttf
+            $(info font paths are: $(FONTPATH))
+            $(info font names are: $(FONTNAME))
+            find_fontfile = $(strip $(firstword $(foreach dir,$(strip $(FONTPATH)),$(wildcard $(dir)/$(1))$(wildcard $(dir)/*/$(1))$(wildcard $(dir)/*/*/$(1))$(wildcard $(dir)/*/*/*/$(1)))))
+            find_font = $(abspath $(strip $(firstword $(foreach font,$(strip $(FONTNAME)),$(call find_fontfile,$(font))))))
+            ifneq (,$(call find_font))
+              FONTFILE=$(call find_font)
+            else
+              $(info ***)
+              $(info *** No font file available, BESM-6 video panel disabled.)
+              $(info ***)
+              $(info *** To enable the panel display please specify one of:)
+              $(info ***          a font path with FONTPATH=path)
+              $(info ***          a font name with FONTNAME=fontname.ttf)
+              $(info ***          a font file with FONTFILE=path/fontname.ttf)
+              $(info ***)
+            endif
+          endif
+          ifeq (,$(and ${VIDEO_LDFLAGS}, ${FONTFILE}, $(BESM6_BUILD)))
+            $(info *** No SDL ttf support available.  BESM-6 video panel disabled.)
+            $(info ***)
+            ifeq (Darwin,$(OSTYPE))
+              ifeq (/opt/local/bin/port,$(shell which port))
+                $(info *** Info *** Install the MacPorts libSDL2-ttf development package to provide this)
+                $(info *** Info *** functionality for your OS X system:)
+                $(info *** Info ***       # port install libsdl2-ttf-dev)
+              endif
+              ifeq (/usr/local/bin/brew,$(shell which brew))
+                ifeq (/opt/local/bin/port,$(shell which port))
+                  $(info *** Info ***)
+                  $(info *** Info *** OR)
+                  $(info *** Info ***)
+                endif
+                $(info *** Info *** Install the HomeBrew sdl2_ttf package to provide this)
+                $(info *** Info *** functionality for your OS X system:)
+                $(info *** Info ***       $$ brew install sdl2_ttf)
+              endif
+            else
+              ifneq (,$(and $(findstring Linux,$(OSTYPE)),$(call find_exe,apt-get)))
+                $(info *** Info *** Install the development components of libSDL2-ttf)
+                $(info *** Info *** packaged for your Linux operating system distribution:)
+                $(info *** Info ***        $$ sudo apt-get install libsdl2-ttf-dev)
+              else
+                $(info *** Info *** Install the development components of libSDL2-ttf packaged by your)
+                $(info *** Info *** operating system distribution and rebuild your simulator to)
+                $(info *** Info *** enable this extra functionality.)
+              endif
+            endif
+          else
+            ifneq (,$(call find_include,SDL2/SDL_ttf),$(call find_lib,SDL2_ttf))
+              $(info using libSDL2_ttf: $(call find_lib,SDL2_ttf) $(call find_include,SDL2/SDL_ttf))
+              $(info ***)
+              BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} $(filter-out -DSDL_MAIN_AVAILABLE,${VIDEO_CCDEFS}) ${VIDEO_LDFLAGS} -lSDL2_ttf
+            endif
+          endif
         endif
       endif
-    endif
-    ifeq (cygwin,$(OSTYPE))
-      LIBEXT = $(LIBEXTSAVE)
     endif
     ifeq (,$(findstring HAVE_LIBSDL,$(VIDEO_CCDEFS)))
       $(info *** Info ***)
@@ -725,6 +822,14 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
       $(info *** Info ***)
+    endif
+  endif
+  ifeq (cygwin,$(OSTYPE))
+    LIBEXT = $(LIBEXTSAVE)
+    LIBPATH += /usr/lib/w32api
+    ifneq (,$(call find_lib,winmm))
+      OS_CCDEFS += -DHAVE_WINMM
+      OS_LDFLAGS += -lwinmm
     endif
   endif
   ifneq (,$(NETWORK_USEFUL))
@@ -1128,7 +1233,7 @@ else
     GIT_COMMIT_ID=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_ID" .git-commit-id)") do echo %%i)
     GIT_COMMIT_TIME=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_TIME" .git-commit-id)") do echo %%i)
   else
-##    ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h | findstr Format))
+##  ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h | findstr Format))
     ifeq (,$(shell findstr /C:"define SIM_GIT_COMMIT_ID" ../sim_rev.h | findstr Format))
       GIT_COMMIT_ID=$(shell for /F "tokens=3" %%i in ("$(shell findstr /C:"define SIM_GIT_COMMIT_ID" sim_rev.h)") do echo %%i)
       GIT_COMMIT_TIME=$(shell for /F "tokens=3" %%i in ("$(shell findstr /C:"define SIM_GIT_COMMIT_TIME" sim_rev.h)") do echo %%i)
@@ -1139,18 +1244,20 @@ else
       $(info Cloning the windows-build dependencies into $(abspath ..)/windows-build)
       $(shell git clone https://github.com/simh/windows-build ../windows-build)
     else
-      $(info ***********************************************************************)
-      $(info ***********************************************************************)
-      $(info **  This build is operating without the required windows-build       **)
-      $(info **  components and therefore will produce less than optimal          **)
-      $(info **  simulator operation and features.                                **)
-      $(info **  Download the file:                                               **)
-      $(info **  https://github.com/simh/windows-build/archive/windows-build.zip  **)
-      $(info **  Extract the windows-build-windows-build folder it contains to    **)
-      $(info **  $(abspath ..\)                                                   **)
-      $(info ***********************************************************************)
-      $(info ***********************************************************************)
-      $(info .)
+      ifneq (3,${SIM_MAJOR})
+        $(info ***********************************************************************)
+        $(info ***********************************************************************)
+        $(info **  This build is operating without the required windows-build       **)
+        $(info **  components and therefore will produce less than optimal          **)
+        $(info **  simulator operation and features.                                **)
+        $(info **  Download the file:                                               **)
+        $(info **  https://github.com/simh/windows-build/archive/windows-build.zip  **)
+        $(info **  Extract the windows-build-windows-build folder it contains to    **)
+        $(info **  $(abspath ..\)                                                   **)
+        $(info ***********************************************************************)
+        $(info ***********************************************************************)
+        $(info .)
+      endif
     endif
   else
     # Version check on windows-build
@@ -1210,23 +1317,18 @@ endif
 ifneq (,$(UNSUPPORTED_BUILD))
   CFLAGS_GIT += -DSIM_BUILD=Unsupported=$(UNSUPPORTED_BUILD)
 endif
+OPTIMIZE ?= -O2 -DNDEBUG=1
 ifneq ($(DEBUG),)
-  CFLAGS_G = -g -ggdb -g3
+  CFLAGS_G = -g -ggdb -g3 -D_DEBUG=1
   CFLAGS_O = -O0
   BUILD_FEATURES = - debugging support
+  LTO =
 else
   ifneq (,$(findstring clang,$(COMPILER_NAME))$(findstring LLVM,$(COMPILER_NAME)))
-    CFLAGS_O = -O2 -fno-strict-overflow
-    GCC_OPTIMIZERS_CMD = ${GCC} --help
-    NO_LTO = 1
+    CFLAGS_O = $(OPTIMIZE) -fno-strict-overflow
+    GCC_OPTIMIZERS_CMD = ${GCC} --help 2>&1
   else
-    NO_LTO = 1
-    ifeq (Darwin,$(OSTYPE))
-      CFLAGS_O += -O4 -flto -fwhole-program
-    else
-#     CFLAGS_O := -O2 -fprofile-arcs -ftest-coverage
-      CFLAGS_O := -O2
-    endif
+    CFLAGS_O := $(OPTIMIZE)
   endif
   LDFLAGS_O = 
   GCC_MAJOR_VERSION = $(firstword $(subst  ., ,$(GCC_VERSION)))
@@ -1241,9 +1343,6 @@ else
   endif
   ifneq (,$(GCC_COMMON_CMD))
     GCC_OPTIMIZERS += $(shell $(GCC_COMMON_CMD))
-  endif
-  ifneq (,$(findstring $(GCC_VERSION),$(LTO_EXCLUDE_VERSIONS)))
-    NO_LTO = 1
   endif
   ifneq (,$(findstring -finline-functions,$(GCC_OPTIMIZERS)))
     CFLAGS_O += -finline-functions
@@ -1263,13 +1362,16 @@ else
   ifneq (,$(findstring -fstrict-overflow,$(GCC_OPTIMIZERS)))
     CFLAGS_O += -fno-strict-overflow
   endif
-  ifeq (,$(NO_LTO))
+  ifneq (,$(findstring $(GCC_VERSION),$(LTO_EXCLUDE_VERSIONS)))
+    override LTO =
+  endif
+  ifneq (,$(LTO))
     ifneq (,$(findstring -flto,$(GCC_OPTIMIZERS)))
-      CFLAGS_O += -flto -fwhole-program
-      LDFLAGS_O += -flto -fwhole-program
+      CFLAGS_O += -flto
+      LTO_FEATURE = , with Link Time Optimization,
     endif
   endif
-  BUILD_FEATURES = - compiler optimizations and no debugging support
+  BUILD_FEATURES = - compiler optimizations$(LTO_FEATURE) and no debugging support
 endif
 ifneq (3,$(GCC_MAJOR_VERSION))
   ifeq (,$(GCC_WARNINGS_CMD))
@@ -1310,13 +1412,12 @@ ifneq ($(DONT_USE_READER_THREAD),)
 endif
 
 CC_OUTSPEC = -o $@
-##CC := ${GCC} ${CC_STD} -Wall -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
+##CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
 CC := ${GCC} ${CC_STD} -g -Wno-address -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I .. ${OS_CCDEFS} ${ROMS_OPT}
 ifneq (,${SIM_VERSION_MODE})
   CC += -DSIM_VERSION_MODE="${SIM_VERSION_MODE}"
 endif
 LDFLAGS := ${OS_LDFLAGS} ${NETWORK_LDFLAGS} ${LDFLAGS_O}
-
 
 #
 # Common Libraries
@@ -1333,6 +1434,359 @@ SIM = ${SIMHD}/scp.c ${SIMHD}/sim_console.c ${SIMHD}/sim_fio.c \
 
 DISPLAYD = ${SIMHD}/display
 
+SCSI = ${SIMHD}/sim_scsi.c
+
+#
+# Emulator source files and compile time options
+#
+PDP1D = ${SIMHD}/PDP1
+PDP1_DISPLAY_OPT = -DDISPLAY_TYPE=DIS_TYPE30 -DPIX_SCALE=RES_HALF
+PDP1 = ${PDP1D}/pdp1_lp.c ${PDP1D}/pdp1_cpu.c ${PDP1D}/pdp1_stddev.c \
+	${PDP1D}/pdp1_sys.c ${PDP1D}/pdp1_dt.c ${PDP1D}/pdp1_drm.c \
+	${PDP1D}/pdp1_clk.c ${PDP1D}/pdp1_dcs.c ${PDP1D}/pdp1_dpy.c ${DISPLAYL}
+PDP1_OPT = -I ${PDP1D} ${DISPLAY_OPT} $(PDP1_DISPLAY_OPT)
+
+
+ND100D = ${SIMHD}/ND100
+ND100 = ${ND100D}/nd100_sys.c ${ND100D}/nd100_cpu.c ${ND100D}/nd100_floppy.c \
+	${ND100D}/nd100_stddev.c ${ND100D}/nd100_mm.c
+ND100_OPT = -I ${ND100D}
+
+NOVAD = ${SIMHD}/NOVA
+NOVA = ${NOVAD}/nova_sys.c ${NOVAD}/nova_cpu.c ${NOVAD}/nova_dkp.c \
+	${NOVAD}/nova_dsk.c ${NOVAD}/nova_lp.c ${NOVAD}/nova_mta.c \
+	${NOVAD}/nova_plt.c ${NOVAD}/nova_pt.c ${NOVAD}/nova_clk.c \
+	${NOVAD}/nova_tt.c ${NOVAD}/nova_tt1.c ${NOVAD}/nova_qty.c
+NOVA_OPT = -I ${NOVAD}
+
+
+ECLIPSE = ${NOVAD}/eclipse_cpu.c ${NOVAD}/eclipse_tt.c ${NOVAD}/nova_sys.c \
+	${NOVAD}/nova_dkp.c ${NOVAD}/nova_dsk.c ${NOVAD}/nova_lp.c \
+	${NOVAD}/nova_mta.c ${NOVAD}/nova_plt.c ${NOVAD}/nova_pt.c \
+	${NOVAD}/nova_clk.c ${NOVAD}/nova_tt1.c ${NOVAD}/nova_qty.c
+ECLIPSE_OPT = -I ${NOVAD} -DECLIPSE -DUSE_INT64
+
+
+PDP18BD = ${SIMHD}/PDP18B
+PDP18B = ${PDP18BD}/pdp18b_dt.c ${PDP18BD}/pdp18b_drm.c ${PDP18BD}/pdp18b_cpu.c \
+	${PDP18BD}/pdp18b_lp.c ${PDP18BD}/pdp18b_mt.c ${PDP18BD}/pdp18b_rf.c \
+	${PDP18BD}/pdp18b_rp.c ${PDP18BD}/pdp18b_stddev.c ${PDP18BD}/pdp18b_sys.c \
+	${PDP18BD}/pdp18b_rb.c ${PDP18BD}/pdp18b_tt1.c ${PDP18BD}/pdp18b_fpp.c \
+	${PDP18BD}/pdp18b_g2tty.c ${PDP18BD}/pdp18b_dr15.c
+
+ifneq (,${DISPLAY_OPT})
+  PDP7_DISPLAY_OPT = -DDISPLAY_TYPE=DIS_TYPE30 -DPIX_SCALE=RES_HALF
+endif
+
+PDP4_OPT = -DPDP4 -I ${PDP18BD}
+PDP7_OPT = -DPDP7 -I ${PDP18BD} ${DISPLAY_OPT} $(PDP7_DISPLAY_OPT)
+PDP9_OPT = -DPDP9 -I ${PDP18BD}
+PDP15_OPT = -DPDP15 -I ${PDP18BD}
+
+
+PDP11D = ${SIMHD}/PDP11
+PDP11 = ${PDP11D}/pdp11_fp.c ${PDP11D}/pdp11_cpu.c ${PDP11D}/pdp11_dz.c \
+	${PDP11D}/pdp11_cis.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_rk.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rp.c ${PDP11D}/pdp11_rx.c \
+	${PDP11D}/pdp11_stddev.c ${PDP11D}/pdp11_sys.c ${PDP11D}/pdp11_tc.c \
+	${PDP11D}/pdp11_tm.c ${PDP11D}/pdp11_ts.c ${PDP11D}/pdp11_io.c \
+	${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_tq.c ${PDP11D}/pdp11_pclk.c \
+	${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_pt.c ${PDP11D}/pdp11_hk.c \
+	${PDP11D}/pdp11_xq.c ${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_vh.c \
+	${PDP11D}/pdp11_rh.c ${PDP11D}/pdp11_tu.c ${PDP11D}/pdp11_cpumod.c \
+	${PDP11D}/pdp11_cr.c ${PDP11D}/pdp11_rf.c ${PDP11D}/pdp11_dl.c \
+	${PDP11D}/pdp11_ta.c ${PDP11D}/pdp11_rc.c ${PDP11D}/pdp11_kg.c \
+	${PDP11D}/pdp11_ke.c ${PDP11D}/pdp11_dc.c ${PDP11D}/pdp11_dmc.c \
+	${PDP11D}/pdp11_kmc.c ${PDP11D}/pdp11_dup.c ${PDP11D}/pdp11_rs.c \
+	${PDP11D}/pdp11_vt.c ${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_io_lib.c \
+	${PDP11D}/pdp11_rom.c ${PDP11D}/pdp11_ch.c ${PDP11D}/pdp11_dh.c \
+	${PDP11D}/pdp11_ng.c ${PDP11D}/pdp11_daz.c ${PDP11D}/pdp11_tv.c \
+	${PDP11D}/pdp11_mb.c \
+	${DISPLAYL} ${DISPLAYNG} ${DISPLAYVT}
+PDP11_OPT = -DVM_PDP11 -I ${PDP11D} ${NETWORK_OPT} ${DISPLAY_OPT}
+
+
+UC15D = ${SIMHD}/PDP11
+UC15 = ${UC15D}/pdp11_cis.c ${UC15D}/pdp11_cpu.c \
+	${UC15D}/pdp11_cpumod.c ${UC15D}/pdp11_cr.c \
+	${UC15D}/pdp11_fp.c ${UC15D}/pdp11_io.c \
+	${UC15D}/pdp11_io_lib.c ${UC15D}/pdp11_lp.c \
+	${UC15D}/pdp11_rh.c ${UC15D}/pdp11_rk.c \
+	${UC15D}/pdp11_stddev.c ${UC15D}/pdp11_sys.c \
+	${UC15D}/pdp11_uc15.c
+UC15_OPT = -DVM_PDP11 -DUC15 -I ${UC15D} -I ${PDP18BD}
+
+
+VAXD = ${SIMHD}/VAX
+VAX = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c ${VAXD}/vax_io.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c  ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_stddev.c ${VAXD}/vax_sysdev.c \
+	${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c ${VAXD}/vax_syslist.c \
+	${VAXD}/vax_vc.c ${VAXD}/vax_lk.c ${VAXD}/vax_vs.c ${VAXD}/vax_2681.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xq.c ${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_dup.c
+VAX_OPT = -DVM_VAX -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
+
+
+VAX410 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c ${VAXD}/vax_syscm.c \
+	${VAXD}/vax_watch.c ${VAXD}/vax_nar.c ${VAXD}/vax4xx_stddev.c \
+	${VAXD}/vax410_sysdev.c ${VAXD}/vax410_syslist.c ${VAXD}/vax4xx_dz.c \
+	${VAXD}/vax4xx_rd.c ${VAXD}/vax4xx_rz80.c ${VAXD}/vax_xs.c \
+	${VAXD}/vax4xx_va.c ${VAXD}/vax4xx_vc.c ${VAXD}/vax_lk.c \
+	${VAXD}/vax_vs.c ${VAXD}/vax_gpx.c
+VAX410_OPT = -DVM_VAX -DVAX_410 -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
+
+
+VAX420 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c ${VAXD}/vax_syscm.c \
+	${VAXD}/vax_watch.c ${VAXD}/vax_nar.c ${VAXD}/vax4xx_stddev.c \
+	${VAXD}/vax420_sysdev.c ${VAXD}/vax420_syslist.c ${VAXD}/vax4xx_dz.c \
+	${VAXD}/vax4xx_rd.c ${VAXD}/vax4xx_rz80.c ${VAXD}/vax_xs.c \
+	${VAXD}/vax4xx_va.c ${VAXD}/vax4xx_vc.c ${VAXD}/vax4xx_ve.c \
+	${VAXD}/vax_lk.c ${VAXD}/vax_vs.c ${VAXD}/vax_gpx.c
+VAX420_OPT = -DVM_VAX -DVAX_420 -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
+VAX411_OPT = ${VAX420_OPT} -DVAX_411
+VAX412_OPT = ${VAX420_OPT} -DVAX_412
+VAX41A_OPT = ${VAX420_OPT} -DVAX_41A
+VAX41D_OPT = ${VAX420_OPT} -DVAX_41D
+VAX42A_OPT = ${VAX420_OPT} -DVAX_42A
+VAX42B_OPT = ${VAX420_OPT} -DVAX_42B
+
+
+VAX43 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c ${VAXD}/vax_syscm.c \
+	${VAXD}/vax_watch.c ${VAXD}/vax_nar.c ${VAXD}/vax4xx_stddev.c \
+	${VAXD}/vax43_sysdev.c ${VAXD}/vax43_syslist.c ${VAXD}/vax4xx_dz.c \
+	${VAXD}/vax4xx_rz80.c ${VAXD}/vax_xs.c ${VAXD}/vax4xx_vc.c \
+	${VAXD}/vax4xx_ve.c ${VAXD}/vax_lk.c ${VAXD}/vax_vs.c
+VAX43_OPT = -DVM_VAX -DVAX_43 -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
+
+
+VAX440 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c ${VAXD}/vax_syscm.c \
+	${VAXD}/vax_watch.c ${VAXD}/vax_nar.c ${VAXD}/vax4xx_stddev.c \
+	${VAXD}/vax440_sysdev.c ${VAXD}/vax440_syslist.c ${VAXD}/vax4xx_dz.c \
+	${VAXD}/vax_xs.c ${VAXD}/vax_lk.c ${VAXD}/vax_vs.c ${VAXD}/vax4xx_rz94.c
+VAX440_OPT = -DVM_VAX -DVAX_440 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} ${NETWORK_OPT}
+VAX46_OPT = ${VAX440_OPT} -DVAX_46
+VAX47_OPT = ${VAX440_OPT} -DVAX_47
+VAX48_OPT = ${VAX440_OPT} -DVAX_48
+
+
+IS1000 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c ${VAXD}/vax_syscm.c \
+	${VAXD}/vax_watch.c ${VAXD}/vax_nar.c ${VAXD}/vax_xs.c \
+	${VAXD}/vax4xx_rz94.c ${VAXD}/vax4nn_stddev.c \
+	${VAXD}/is1000_sysdev.c ${VAXD}/is1000_syslist.c
+IS1000_OPT = -DVM_VAX -DIS_1000 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} ${NETWORK_OPT}
+
+
+VAX610 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c ${VAXD}/vax_syscm.c \
+	${VAXD}/vax610_stddev.c ${VAXD}/vax610_sysdev.c ${VAXD}/vax610_io.c \
+	${VAXD}/vax610_syslist.c ${VAXD}/vax610_mem.c ${VAXD}/vax_vc.c \
+	${VAXD}/vax_lk.c ${VAXD}/vax_vs.c ${VAXD}/vax_2681.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xq.c ${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_io_lib.c
+VAX610_OPT = -DVM_VAX -DVAX_610 -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
+
+
+VAX630 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c ${VAXD}/vax_syscm.c \
+	${VAXD}/vax_watch.c ${VAXD}/vax630_stddev.c ${VAXD}/vax630_sysdev.c \
+	${VAXD}/vax630_io.c ${VAXD}/vax630_syslist.c ${VAXD}/vax_va.c \
+	${VAXD}/vax_vc.c ${VAXD}/vax_lk.c ${VAXD}/vax_vs.c \
+	${VAXD}/vax_2681.c ${VAXD}/vax_gpx.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xq.c ${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_dup.c
+VAX620_OPT = -DVM_VAX -DVAX_620 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT}
+VAX630_OPT = -DVM_VAX -DVAX_630 -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
+
+
+VAX730 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c  ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
+	${VAXD}/vax730_stddev.c ${VAXD}/vax730_sys.c \
+	${VAXD}/vax730_mem.c ${VAXD}/vax730_uba.c ${VAXD}/vax730_rb.c \
+	${VAXD}/vax_uw.c ${VAXD}/vax730_syslist.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_hk.c ${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
+	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c ${PDP11D}/pdp11_dup.c
+VAX730_OPT = -DVM_VAX -DVAX_730 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT}
+
+
+VAX750 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c  ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
+	${VAXD}/vax750_stddev.c ${VAXD}/vax750_cmi.c \
+	${VAXD}/vax750_mem.c ${VAXD}/vax750_uba.c ${VAXD}/vax7x0_mba.c \
+	${VAXD}/vax_uw.c ${VAXD}/vax750_syslist.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_hk.c ${PDP11D}/pdp11_rp.c ${PDP11D}/pdp11_tu.c \
+	${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c ${PDP11D}/pdp11_dup.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
+	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c
+VAX750_OPT = -DVM_VAX -DVAX_750 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT}
+
+
+VAX780 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c  ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
+	${VAXD}/vax780_stddev.c ${VAXD}/vax780_sbi.c \
+	${VAXD}/vax780_mem.c ${VAXD}/vax780_uba.c ${VAXD}/vax7x0_mba.c \
+	${VAXD}/vax780_fload.c 	${VAXD}/vax_uw.c ${VAXD}/vax780_syslist.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_rp.c ${PDP11D}/pdp11_tu.c ${PDP11D}/pdp11_hk.c \
+	${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c ${PDP11D}/pdp11_dup.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
+	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c
+VAX780_OPT = -DVM_VAX -DVAX_780 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT}
+
+
+VAX8200 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c  ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
+	${VAXD}/vax_watch.c ${VAXD}/vax820_stddev.c ${VAXD}/vax820_bi.c \
+	${VAXD}/vax820_mem.c ${VAXD}/vax820_uba.c ${VAXD}/vax820_ka.c \
+	${VAXD}/vax820_syslist.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_hk.c ${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
+	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c ${PDP11D}/pdp11_dup.c
+VAX8200_OPT = -DVM_VAX -DVAX_820 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT}
+
+
+VAX8600 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
+	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c  ${VAXD}/vax_cmode.c \
+	${VAXD}/vax_mmu.c ${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c \
+	${VAXD}/vax860_stddev.c ${VAXD}/vax860_sbia.c \
+	${VAXD}/vax860_abus.c ${VAXD}/vax780_uba.c ${VAXD}/vax7x0_mba.c \
+	${VAXD}/vax860_syslist.c \
+	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
+	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
+	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_rp.c ${PDP11D}/pdp11_tu.c ${PDP11D}/pdp11_hk.c \
+	${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c ${PDP11D}/pdp11_dup.c \
+	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
+	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c
+VAX8600_OPT = -DVM_VAX -DVAX_860 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT}
+
+
+PDP10D = ${SIMHD}/PDP10
+PDP10 = ${PDP10D}/pdp10_fe.c ${PDP11D}/pdp11_dz.c ${PDP10D}/pdp10_cpu.c \
+	${PDP10D}/pdp10_ksio.c ${PDP10D}/pdp10_lp20.c ${PDP10D}/pdp10_mdfp.c \
+	${PDP10D}/pdp10_pag.c ${PDP10D}/pdp10_rp.c ${PDP10D}/pdp10_sys.c \
+	${PDP10D}/pdp10_tim.c ${PDP10D}/pdp10_tu.c ${PDP10D}/pdp10_xtnd.c \
+	${PDP11D}/pdp11_pt.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
+	${PDP11D}/pdp11_dup.c ${PDP11D}/pdp11_dmc.c ${PDP11D}/pdp11_kmc.c \
+	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ch.c
+PDP10_OPT = -DVM_PDP10 -DUSE_INT64 -I ${PDP10D} -I ${PDP11D} ${NETWORK_OPT}
+
+
+IMLACD = ${SIMHD}/imlac
+IMLAC = ${IMLACD}/imlac_sys.c ${IMLACD}/imlac_cpu.c \
+	${IMLACD}/imlac_dp.c ${IMLACD}/imlac_crt.c ${IMLACD}/imlac_kbd.c \
+	${IMLACD}/imlac_tty.c ${IMLACD}/imlac_pt.c ${IMLACD}/imlac_bel.c \
+	${DISPLAYL}
+IMLAC_OPT = -I ${IMLACD} ${DISPLAY_OPT}
+
+
+STUBD = ${SIMHD}/stub
+STUB = ${STUBD}/stub_sys.c ${STUBD}/stub_cpu.c
+STUB_OPT = -I ${STUBD}
+
+
+TT2500D = ${SIMHD}/tt2500
+TT2500 = ${TT2500D}/tt2500_sys.c ${TT2500D}/tt2500_cpu.c \
+	${TT2500D}/tt2500_dpy.c ${TT2500D}/tt2500_crt.c ${TT2500D}/tt2500_tv.c \
+	${TT2500D}/tt2500_key.c ${TT2500D}/tt2500_uart.c ${TT2500D}/tt2500_rom.c \
+	${DISPLAYL}
+TT2500_OPT = -I ${TT2500D} ${DISPLAY_OPT}
+
+
+PDP8D = ${SIMHD}/PDP8
+PDP8 = ${PDP8D}/pdp8_cpu.c ${PDP8D}/pdp8_clk.c ${PDP8D}/pdp8_df.c \
+	${PDP8D}/pdp8_dt.c ${PDP8D}/pdp8_lp.c ${PDP8D}/pdp8_mt.c \
+	${PDP8D}/pdp8_pt.c ${PDP8D}/pdp8_rf.c ${PDP8D}/pdp8_rk.c \
+	${PDP8D}/pdp8_rx.c ${PDP8D}/pdp8_sys.c ${PDP8D}/pdp8_tt.c \
+	${PDP8D}/pdp8_ttx.c ${PDP8D}/pdp8_rl.c ${PDP8D}/pdp8_tsc.c \
+	${PDP8D}/pdp8_td.c ${PDP8D}/pdp8_ct.c ${PDP8D}/pdp8_fpp.c
+PDP8_OPT = -I ${PDP8D}
+
+
+H316D = ${SIMHD}/H316
+H316 = ${H316D}/h316_stddev.c ${H316D}/h316_lp.c ${H316D}/h316_cpu.c \
+	${H316D}/h316_sys.c ${H316D}/h316_mt.c ${H316D}/h316_fhd.c \
+	${H316D}/h316_dp.c ${H316D}/h316_rtc.c ${H316D}/h316_imp.c \
+	${H316D}/h316_hi.c ${H316D}/h316_mi.c ${H316D}/h316_udp.c 
+H316_OPT = -I ${H316D} -D VM_IMPTIP
+
+
+HP2100D = ${SIMHD}/HP2100
+HP2100 = ${HP2100D}/hp2100_baci.c ${HP2100D}/hp2100_cpu.c \
+        ${HP2100D}/hp2100_cpu_fp.c ${HP2100D}/hp2100_cpu_fpp.c \
+        ${HP2100D}/hp2100_cpu0.c ${HP2100D}/hp2100_cpu1.c \
+        ${HP2100D}/hp2100_cpu2.c ${HP2100D}/hp2100_cpu3.c \
+        ${HP2100D}/hp2100_cpu4.c ${HP2100D}/hp2100_cpu5.c \
+        ${HP2100D}/hp2100_cpu6.c ${HP2100D}/hp2100_cpu7.c \
+        ${HP2100D}/hp2100_di.c ${HP2100D}/hp2100_di_da.c \
+        ${HP2100D}/hp2100_disclib.c ${HP2100D}/hp2100_dma.c \
+        ${HP2100D}/hp2100_dp.c ${HP2100D}/hp2100_dq.c \
+        ${HP2100D}/hp2100_dr.c ${HP2100D}/hp2100_ds.c \
+        ${HP2100D}/hp2100_ipl.c ${HP2100D}/hp2100_lps.c \
+        ${HP2100D}/hp2100_lpt.c ${HP2100D}/hp2100_mc.c \
+        ${HP2100D}/hp2100_mem.c ${HP2100D}/hp2100_mpx.c \
+        ${HP2100D}/hp2100_ms.c ${HP2100D}/hp2100_mt.c \
+        ${HP2100D}/hp2100_mux.c ${HP2100D}/hp2100_pif.c \
+        ${HP2100D}/hp2100_pt.c ${HP2100D}/hp2100_sys.c \
+        ${HP2100D}/hp2100_tbg.c ${HP2100D}/hp2100_tty.c
+HP2100_OPT = -DHAVE_INT64 -I ${HP2100D}
+
+HP3000D = ${SIMHD}/HP3000
+HP3000 = ${HP3000D}/hp_disclib.c ${HP3000D}/hp_tapelib.c ${HP3000D}/hp3000_atc.c \
+	${HP3000D}/hp3000_clk.c ${HP3000D}/hp3000_cpu.c ${HP3000D}/hp3000_cpu_base.c \
+	${HP3000D}/hp3000_cpu_fp.c ${HP3000D}/hp3000_cpu_cis.c ${HP3000D}/hp3000_ds.c \
+	${HP3000D}/hp3000_iop.c ${HP3000D}/hp3000_lp.c ${HP3000D}/hp3000_mem.c \
+	${HP3000D}/hp3000_mpx.c ${HP3000D}/hp3000_ms.c ${HP3000D}/hp3000_scmb.c \
+	${HP3000D}/hp3000_sel.c ${HP3000D}/hp3000_sys.c
+HP3000_OPT = -I ${HP3000D}
+
+
+I1401D = ${SIMHD}/I1401
+I1401 = ${I1401D}/i1401_lp.c ${I1401D}/i1401_cpu.c ${I1401D}/i1401_iq.c \
+	${I1401D}/i1401_cd.c ${I1401D}/i1401_mt.c ${I1401D}/i1401_dp.c \
+	${I1401D}/i1401_sys.c
+I1401_OPT = -I ${I1401D}
+
+
+I1620D = ${SIMHD}/I1620
+I1620 = ${I1620D}/i1620_cd.c ${I1620D}/i1620_dp.c ${I1620D}/i1620_pt.c \
+	${I1620D}/i1620_tty.c ${I1620D}/i1620_cpu.c ${I1620D}/i1620_lp.c \
+	${I1620D}/i1620_fp.c ${I1620D}/i1620_sys.c
+I1620_OPT = -I ${I1620D}
 
 I7000D = ${SIMHD}/I7000
 I7090 = ${I7000D}/i7090_cpu.c ${I7000D}/i7090_sys.c ${I7000D}/i7090_chan.c \
@@ -1388,39 +1842,200 @@ I7094 = ${I7094D}/i7094_cpu.c ${I7094D}/i7094_cpu1.c ${I7094D}/i7094_io.c \
 I7094_OPT = -DUSE_INT64 -I ${I7094D}
 
 
+I650D = ${SIMHD}/I650
+I650 = ${I650D}/i650_cpu.c ${I650D}/i650_cdr.c ${I650D}/i650_cdp.c \
+	${I650D}/i650_dsk.c ${I650D}/i650_mt.c ${I650D}/i650_sys.c
+I650_OPT = -I ${I650D} -DUSE_INT64 -DUSE_SIM_CARD
+
+
+IBM1130D = ${SIMHD}/Ibm1130
+IBM1130 = ${IBM1130D}/ibm1130_cpu.c ${IBM1130D}/ibm1130_cr.c \
+	${IBM1130D}/ibm1130_disk.c ${IBM1130D}/ibm1130_stddev.c \
+	${IBM1130D}/ibm1130_sys.c ${IBM1130D}/ibm1130_gdu.c \
+	${IBM1130D}/ibm1130_gui.c ${IBM1130D}/ibm1130_prt.c \
+	${IBM1130D}/ibm1130_fmt.c ${IBM1130D}/ibm1130_ptrp.c \
+	${IBM1130D}/ibm1130_plot.c ${IBM1130D}/ibm1130_sca.c \
+	${IBM1130D}/ibm1130_t2741.c
+IBM1130_OPT = -I ${IBM1130D}
+ifneq (${WIN32},)
+IBM1130_OPT += -DGUI_SUPPORT -lgdi32 ${BIN}ibm1130.o 
+endif  
+
+
+ID16D = ${SIMHD}/Interdata
+ID16 = ${ID16D}/id16_cpu.c ${ID16D}/id16_sys.c ${ID16D}/id_dp.c \
+	${ID16D}/id_fd.c ${ID16D}/id_fp.c ${ID16D}/id_idc.c ${ID16D}/id_io.c \
+	${ID16D}/id_lp.c ${ID16D}/id_mt.c ${ID16D}/id_pas.c ${ID16D}/id_pt.c \
+	${ID16D}/id_tt.c ${ID16D}/id_uvc.c ${ID16D}/id16_dboot.c ${ID16D}/id_ttp.c
+ID16_OPT = -DIFP_IN_MEM -I ${ID16D}
+
+
+ID32D = ${SIMHD}/Interdata
+ID32 = ${ID32D}/id32_cpu.c ${ID32D}/id32_sys.c ${ID32D}/id_dp.c \
+	${ID32D}/id_fd.c ${ID32D}/id_fp.c ${ID32D}/id_idc.c ${ID32D}/id_io.c \
+	${ID32D}/id_lp.c ${ID32D}/id_mt.c ${ID32D}/id_pas.c ${ID32D}/id_pt.c \
+	${ID32D}/id_tt.c ${ID32D}/id_uvc.c ${ID32D}/id32_dboot.c ${ID32D}/id_ttp.c
+ID32_OPT = -I ${ID32D}
+
+
+S3D = ${SIMHD}/S3
+S3 = ${S3D}/s3_cd.c ${S3D}/s3_cpu.c ${S3D}/s3_disk.c ${S3D}/s3_lp.c \
+	${S3D}/s3_pkb.c ${S3D}/s3_sys.c
+S3_OPT = -I ${S3D}
+
+
+ALTAIRD = ${SIMHD}/ALTAIR
+ALTAIR = ${ALTAIRD}/altair_sio.c ${ALTAIRD}/altair_cpu.c ${ALTAIRD}/altair_dsk.c \
+	${ALTAIRD}/altair_sys.c
+ALTAIR_OPT = -I ${ALTAIRD}
+
+
+ALTAIRZ80D = ${SIMHD}/AltairZ80
+ALTAIRZ80 = ${ALTAIRZ80D}/altairz80_cpu.c ${ALTAIRZ80D}/altairz80_cpu_nommu.c \
+	${ALTAIRZ80D}/sol20.c \
+	${ALTAIRZ80D}/s100_vdm1.c \
+	${ALTAIRZ80D}/mmd.c \
+	${ALTAIRZ80D}/s100_dj2d.c \
+	${ALTAIRZ80D}/s100_djhdc.c \
+	${ALTAIRZ80D}/altairz80_dsk.c ${ALTAIRZ80D}/disasm.c \
+	${ALTAIRZ80D}/altairz80_sio.c ${ALTAIRZ80D}/altairz80_sys.c \
+	${ALTAIRZ80D}/altairz80_hdsk.c ${ALTAIRZ80D}/altairz80_net.c \
+	${ALTAIRZ80D}/s100_hayes.c ${ALTAIRZ80D}/s100_2sio.c ${ALTAIRZ80D}/s100_pmmi.c\
+	${ALTAIRZ80D}/flashwriter2.c ${ALTAIRZ80D}/i86_decode.c \
+	${ALTAIRZ80D}/i86_ops.c ${ALTAIRZ80D}/i86_prim_ops.c \
+	${ALTAIRZ80D}/i8272.c ${ALTAIRZ80D}/insnsd.c ${ALTAIRZ80D}/altairz80_mhdsk.c \
+	${ALTAIRZ80D}/ibc.c ${ALTAIRZ80D}/ibc_mcc_hdc.c ${ALTAIRZ80D}/ibc_smd_hdc.c \
+	${ALTAIRZ80D}/mfdc.c ${ALTAIRZ80D}/n8vem.c ${ALTAIRZ80D}/vfdhd.c \
+	${ALTAIRZ80D}/s100_disk1a.c ${ALTAIRZ80D}/s100_disk2.c ${ALTAIRZ80D}/s100_disk3.c \
+	${ALTAIRZ80D}/s100_fif.c ${ALTAIRZ80D}/s100_mdriveh.c \
+	${ALTAIRZ80D}/s100_icom.c \
+	${ALTAIRZ80D}/s100_jadedd.c \
+	${ALTAIRZ80D}/s100_mdsa.c \
+	${ALTAIRZ80D}/s100_mdsad.c ${ALTAIRZ80D}/s100_selchan.c \
+	${ALTAIRZ80D}/s100_ss1.c ${ALTAIRZ80D}/s100_64fdc.c \
+	${ALTAIRZ80D}/s100_scp300f.c \
+	${ALTAIRZ80D}/s100_tarbell.c \
+	${ALTAIRZ80D}/s100_tdd.c \
+	${ALTAIRZ80D}/wd179x.c ${ALTAIRZ80D}/s100_hdc1001.c \
+	${ALTAIRZ80D}/s100_if3.c ${ALTAIRZ80D}/s100_adcs6.c \
+	${ALTAIRZ80D}/m68k/m68kcpu.c ${ALTAIRZ80D}/m68k/m68kdasm.c ${ALTAIRZ80D}/m68k/m68kasm.c \
+	${ALTAIRZ80D}/m68k/m68kopac.c ${ALTAIRZ80D}/m68k/m68kopdm.c \
+	${ALTAIRZ80D}/m68k/softfloat/softfloat.c \
+	${ALTAIRZ80D}/m68k/m68kopnz.c ${ALTAIRZ80D}/m68k/m68kops.c ${ALTAIRZ80D}/m68ksim.c
+ALTAIRZ80_OPT = -I ${ALTAIRZ80D} -DUSE_SIM_VIDEO ${VIDEO_CCDEFS} $(VIDEO_LDFLAGS)
+
+
+GRID = ${SIMHD}/GRI
+GRI = ${GRID}/gri_cpu.c ${GRID}/gri_stddev.c ${GRID}/gri_sys.c
+GRI_OPT = -I ${GRID}
+
+
+LGPD = ${SIMHD}/LGP
+LGP = ${LGPD}/lgp_cpu.c ${LGPD}/lgp_stddev.c ${LGPD}/lgp_sys.c
+LGP_OPT = -I ${LGPD}
+
+
+SDSD = ${SIMHD}/SDS
+SDS = ${SDSD}/sds_cpu.c ${SDSD}/sds_drm.c ${SDSD}/sds_dsk.c ${SDSD}/sds_io.c \
+	${SDSD}/sds_lp.c ${SDSD}/sds_mt.c ${SDSD}/sds_mux.c ${SDSD}/sds_rad.c \
+	${SDSD}/sds_stddev.c ${SDSD}/sds_sys.c ${SDSD}/sds_cp.c ${SDSD}/sds_cr.c
+SDS_OPT = -I ${SDSD} -DUSE_SIM_CARD
+
+
+SWTP6800D = ${SIMHD}/swtp6800/swtp6800
+SWTP6800C = ${SIMHD}/swtp6800/common
+SWTP6800MP-A = ${SWTP6800C}/mp-a.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
+	${SWTP6800C}/bootrom.c ${SWTP6800C}/dc-4.c ${SWTP6800D}/mp-a_sys.c \
+	${SWTP6800C}/mp-8m.c ${SWTP6800C}/fd400.c ${SWTP6800C}/mp-b2.c \
+	${SWTP6800C}/mp-s.c
+SWTP6800MP-A2 = ${SWTP6800C}/mp-a2.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
+	${SWTP6800C}/bootrom.c ${SWTP6800C}/dc-4.c ${SWTP6800D}/mp-a2_sys.c \
+	${SWTP6800C}/mp-8m.c ${SWTP6800C}/i2716.c ${SWTP6800C}/fd400.c \
+	${SWTP6800C}/mp-s.c ${SWTP6800C}/mp-b2.c
+SWTP6800_OPT = -I ${SWTP6800D}
+
+INTELSYSD = ${SIMHD}/Intel-Systems
+INTELSYSC = ${SIMHD}/Intel-Systems/common
+
+INTEL_PARTS = \
+	${INTELSYSC}/i3214.c \
+	${INTELSYSC}/i8251.c \
+	${INTELSYSC}/i8253.c \
+	${INTELSYSC}/i8255.c \
+	${INTELSYSC}/i8259.c \
+	${INTELSYSC}/ieprom.c \
+	${INTELSYSC}/ioc-cont.c \
+	${INTELSYSC}/ipc-cont.c \
+	${INTELSYSC}/iram8.c \
+	${INTELSYSC}/isbc064.c \
+	${INTELSYSC}/isbc202.c \
+	${INTELSYSC}/isbc201.c \
+	${INTELSYSC}/isbc206.c \
+	${INTELSYSC}/isbc464.c \
+	${INTELSYSC}/isbc208.c \
+	${INTELSYSC}/port.c \
+	${INTELSYSC}/irq.c \
+	${INTELSYSC}/multibus.c \
+	${INTELSYSC}/mem.c \
+	${INTELSYSC}/sys.c \
+	${INTELSYSC}/zx200a.c 
+
+
+INTEL_MDSD = ${INTELSYSD}/Intel-MDS
+INTEL_MDS = ${INTELSYSC}/i8080.c ${INTEL_MDSD}/imds_sys.c \
+	${INTEL_PARTS}
+INTEL_MDS_OPT = -I ${INTEL_MDSD}
+
+
+IBMPCD = ${INTELSYSD}/ibmpc
+IBMPCC = ${INTELSYSD}/common
+IBMPC =	${IBMPCC}/i8255.c ${IBMPCD}/ibmpc.c \
+	${IBMPCC}/i8088.c ${IBMPCD}/ibmpc_sys.c \
+	${IBMPCC}/i8253.c ${IBMPCC}/i8259.c \
+	${IBMPCC}/pceprom.c ${IBMPCC}/pcram8.c \
+	${IBMPCC}/i8237.c ${IBMPCC}/pcbus.c
+IBMPC_OPT = -I ${IBMPCD}
+
+
+IBMPCXTD = ${INTELSYSD}/ibmpcxt
+IBMPCXTC = ${INTELSYSD}/common
+IBMPCXT = ${IBMPCXTC}/i8088.c ${IBMPCXTD}/ibmpcxt_sys.c \
+	${IBMPCXTC}/i8253.c ${IBMPCXTC}/i8259.c \
+	${IBMPCXTC}/i8255.c ${IBMPCXTD}/ibmpcxt.c \
+	${IBMPCXTC}/pceprom.c ${IBMPCXTC}/pcram8.c \
+	${IBMPCXTC}/pcbus.c ${IBMPCXTC}/i8237.c 
+IBMPCXT_OPT = -I ${IBMPCXTD}
+
+
+SCELBID = ${INTELSYSD}/scelbi
+SCELBIC = ${INTELSYSD}/common
+SCELBI = ${SCELBIC}/i8008.c ${SCELBID}/scelbi_sys.c ${SCELBID}/scelbi_io.c
+SCELBI_OPT = -I ${SCELBID}
+
+
+TX0D = ${SIMHD}/TX-0
+TX0 = ${TX0D}/tx0_cpu.c ${TX0D}/tx0_dpy.c ${TX0D}/tx0_stddev.c \
+	${TX0D}/tx0_sys.c ${TX0D}/tx0_sys_orig.c ${DISPLAYL}
+TX0_OPT = -I ${TX0D} ${DISPLAY_OPT}
+
+
+SSEMD = ${SIMHD}/SSEM
+SSEM = ${SSEMD}/ssem_cpu.c ${SSEMD}/ssem_sys.c
+SSEM_OPT = -I ${SSEMD}
+
 B5500D = ${SIMHD}/B5500
 B5500 = ${B5500D}/b5500_cpu.c ${B5500D}/b5500_io.c ${B5500D}/b5500_sys.c \
 	${B5500D}/b5500_dk.c ${B5500D}/b5500_mt.c ${B5500D}/b5500_urec.c \
 	${B5500D}/b5500_dr.c ${B5500D}/b5500_dtc.c
-B5500_OPT = -I.. -DUSE_INT64 -DB5500 -DUSE_SIM_CARD
+B5500_OPT = -I${B5500D} -DUSE_INT64 -DB5500 -DUSE_SIM_CARD
 
-##SEL32D = ${SIMHD}/SEL32
-SEL32D = ../SEL32
-SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
-	${SEL32D}/sel32_iop.c ${SEL32D}/sel32_com.c ${SEL32D}/sel32_con.c \
-	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
-	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
-	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
-	${SEL32D}/sel32_ec.c ${SEL32D}/sel32_ipu.c
-SEL32_OPT = -I $(SEL32D) -DSEL32  -DUSE_INT32 ${NETWORK_OPT}
-#SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
-
-ICL1900D = ${SIMHD}/ICL1900
-ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
-	${ICL1900D}/icl1900_stdio.c ${ICL1900D}/icl1900_cty.c \
-	${ICL1900D}/icl1900_tr.c ${ICL1900D}/icl1900_tp.c \
-	${ICL1900D}/icl1900_cr.c ${ICL1900D}/icl1900_cp.c \
-	${ICL1900D}/icl1900_lp.c ${ICL1900D}/icl1900_mta.c \
-	${ICL1900D}/icl1900_mt.c ${ICL1900D}/icl1900_eds8.c
-ICL1900_OPT = -I $(ICL1900D) -DICL1900 -DUSE_SIM_CARD
-
-IBM360D = ${SIMHD}/IBM360
-IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c \
-	${IBM360D}/ibm360_chan.c ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
-	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
-	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_vma.c
-IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
-IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
+BESM6D = ${SIMHD}/BESM6
+BESM6 = ${BESM6D}/besm6_cpu.c ${BESM6D}/besm6_sys.c ${BESM6D}/besm6_mmu.c \
+        ${BESM6D}/besm6_arith.c ${BESM6D}/besm6_disk.c ${BESM6D}/besm6_drum.c \
+        ${BESM6D}/besm6_tty.c ${BESM6D}/besm6_panel.c ${BESM6D}/besm6_printer.c \
+        ${BESM6D}/besm6_pl.c ${BESM6D}/besm6_mg.c \
+        ${BESM6D}/besm6_punch.c ${BESM6D}/besm6_punchcard.c ${BESM6D}/besm6_vu.c
+BESM6_OPT = -I ${BESM6D} -DUSE_INT64 $(BESM6_PANEL_OPT)
 
 PDP6D = ${SIMHD}/PDP10
 ifneq (,${DISPLAY_OPT})
@@ -1432,14 +2047,7 @@ PDP6 = ${PDP6D}/kx10_cpu.c ${PDP6D}/kx10_sys.c ${PDP6D}/kx10_cty.c \
 	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c \
 	${PDP6D}/kx10_dpy.c ${PDP6D}/pdp6_slave.c ${DISPLAYL} ${DISPLAY340}
 PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I ${PDP6D} -DUSE_SIM_CARD ${DISPLAY_OPT} ${PDP6_DISPLAY_OPT}
-ifneq (${PANDA_LIGHTS},)
-# ONLY for Panda display.
-PDP6_OPT += -DPANDA_LIGHTS
-PDP6 += ${PDP6D}/kx10_lights.c
-PDP6_LDFLAGS += -lusb-1.0
-endif
 
-PDP10D = ${SIMHD}/PDP10
 KA10D = ${SIMHD}/PDP10
 ifneq (,${DISPLAY_OPT})
   KA10_DISPLAY_OPT = 
@@ -1453,17 +2061,17 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	${KA10D}/kx10_rh.c ${KA10D}/kx10_imp.c ${KA10D}/ka10_tk10.c \
 	${KA10D}/ka10_mty.c ${KA10D}/ka10_imx.c ${KA10D}/ka10_ch10.c \
 	${KA10D}/ka10_stk.c ${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c \
-	$(KA10D)/ka10_pmp.c ${KA10D}/ka10_dkb.c ${KA10D}/pdp6_dct.c \
+	${KA10D}/ka10_pmp.c ${KA10D}/ka10_dkb.c ${KA10D}/pdp6_dct.c \
 	${KA10D}/pdp6_dtc.c ${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c \
 	${KA10D}/pdp6_dcs.c ${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c \
-	${PDP10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${KA10D}/kx10_disk.c \
-	${PDP10D}/ka10_pclk.c ${PDP10D}/ka10_tv.c ${KA10D}/kx10_ddc.c \
-	${DISPLAYL} ${DISPLAY340}
+	${KA10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${KA10D}/kx10_disk.c \
+	${KA10D}/ka10_pclk.c ${KA10D}/ka10_tv.c \
+	${DISPLAYL} ${DISPLAY340} ${DISPLAYIII}
 KA10_OPT = -DKA=1 -DUSE_INT64 -I ${KA10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KA10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
 KA10_OPT += -DPANDA_LIGHTS
-KA10 += ${KA10D}/kx10_lights.c
+KA10 += ${KA10D}/ka10_lights.c
 KA10_LDFLAGS += -lusb-1.0
 endif
 
@@ -1478,82 +2086,574 @@ KI10 = ${KI10D}/kx10_cpu.c ${KI10D}/kx10_sys.c ${KI10D}/kx10_df.c \
 	${KI10D}/kx10_dt.c ${KI10D}/kx10_dk.c ${KI10D}/kx10_cr.c \
 	${KI10D}/kx10_cp.c ${KI10D}/kx10_tu.c ${KI10D}/kx10_rs.c \
 	${KI10D}/kx10_imp.c ${KI10D}/kx10_dpy.c ${KI10D}/kx10_disk.c \
-	${KI10D}/kx10_ddc.c ${KI10D}/kx10_tym.c ${DISPLAYL} ${DISPLAY340}
+	${DISPLAYL} ${DISPLAY340}
 KI10_OPT = -DKI=1 -DUSE_INT64 -I ${KI10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KI10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
 KI10_OPT += -DPANDA_LIGHTS
-KI10 += ${KA10D}/kx10_lights.c
+KI10 += ${KA10D}/ka10_lights.c
 KI10_LDFLAGS = -lusb-1.0
 endif
 
 KL10D = ${SIMHD}/PDP10
-KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
-	${KA10D}/kx10_dp.c ${KA10D}/kx10_mt.c ${KA10D}/kx10_lp.c \
+KL10 =  ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
+    ${KA10D}/kx10_dp.c ${KA10D}/kx10_mt.c ${KA10D}/kx10_lp.c \
     ${KA10D}/kx10_pt.c ${KA10D}/kx10_dc.c ${KL10D}/kx10_rh.c \
     ${KA10D}/kx10_dt.c ${KA10D}/kx10_cr.c ${KA10D}/kx10_cp.c \
-	${KL10D}/kx10_rp.c ${KL10D}/kx10_tu.c ${KL10D}/kx10_rs.c \
-	${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
-	${KL10D}/ka10_ch10.c ${KL10D}/kl10_nia.c ${KL10D}/kx10_disk.c \
-    ${KL10D}/kl10_dn.c
+    ${KL10D}/kx10_rp.c ${KL10D}/kx10_tu.c ${KL10D}/kx10_rs.c \
+    ${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
+    ${KL10D}/ka10_ch10.c ${KL10D}/kl10_nia.c ${KL10D}/kx10_disk.c
 KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
 
 KS10D = ${SIMHD}/PDP10
 KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
 	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/kx10_rh.c \
 	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c ${KS10D}/ks10_dz.c \
-    ${KS10D}/ks10_tcu.c ${KS10D}/ks10_lp.c ${KS10D}/ks10_ch11.c \
-    ${KS10D}/ks10_kmc.c ${KS10D}/ks10_dup.c ${KS10D}/kx10_imp.c
-KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
+	${KS10D}/ks10_tcu.c ${KS10D}/ks10_lp.c ${KS10D}/ks10_ch11.c \
+	${KS10D}/ks10_kmc.c ${KS10D}/ks10_dup.c ${KS10D}/kx10_imp.c
+KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) -I $(PDP11D) ${NETWORK_OPT}
 
+ATT3B2D = ${SIMHD}/3B2
+ATT3B2M400 = ${ATT3B2D}/3b2_cpu.c ${ATT3B2D}/3b2_sys.c \
+    ${ATT3B2D}/3b2_rev2_sys.c ${ATT3B2D}/3b2_rev2_mmu.c \
+    ${ATT3B2D}/3b2_mau.c ${ATT3B2D}/3b2_rev2_csr.c \
+    ${ATT3B2D}/3b2_timer.c ${ATT3B2D}/3b2_stddev.c \
+    ${ATT3B2D}/3b2_mem.c ${ATT3B2D}/3b2_iu.c \
+    ${ATT3B2D}/3b2_if.c ${ATT3B2D}/3b2_id.c \
+    ${ATT3B2D}/3b2_dmac.c ${ATT3B2D}/3b2_io.c \
+    ${ATT3B2D}/3b2_ports.c ${ATT3B2D}/3b2_ctc.c \
+    ${ATT3B2D}/3b2_ni.c
+ATT3B2M400_OPT = -DUSE_INT64 -DUSE_ADDR64 -DREV2 -I ${ATT3B2D} ${NETWORK_OPT}
+
+ATT3B2M700 = ${ATT3B2D}/3b2_cpu.c ${ATT3B2D}/3b2_sys.c \
+    ${ATT3B2D}/3b2_rev3_sys.c ${ATT3B2D}/3b2_rev3_mmu.c \
+    ${ATT3B2D}/3b2_mau.c ${ATT3B2D}/3b2_rev3_csr.c \
+    ${ATT3B2D}/3b2_timer.c ${ATT3B2D}/3b2_stddev.c \
+    ${ATT3B2D}/3b2_mem.c ${ATT3B2D}/3b2_iu.c \
+    ${ATT3B2D}/3b2_if.c ${ATT3B2D}/3b2_dmac.c \
+    ${ATT3B2D}/3b2_io.c ${ATT3B2D}/3b2_ports.c \
+    ${ATT3B2D}/3b2_scsi.c ${ATT3B2D}/3b2_ni.c
+ATT3B2M700_OPT = -DUSE_INT64 -DUSE_ADDR64 -DREV3 -I ${ATT3B2D} ${NETWORK_OPT}
+
+SIGMAD = ${SIMHD}/sigma
+SIGMA = ${SIGMAD}/sigma_cpu.c ${SIGMAD}/sigma_sys.c ${SIGMAD}/sigma_cis.c \
+	${SIGMAD}/sigma_coc.c ${SIGMAD}/sigma_dk.c ${SIGMAD}/sigma_dp.c \
+	${SIGMAD}/sigma_fp.c ${SIGMAD}/sigma_io.c ${SIGMAD}/sigma_lp.c \
+	${SIGMAD}/sigma_map.c ${SIGMAD}/sigma_mt.c ${SIGMAD}/sigma_pt.c \
+	${SIGMAD}/sigma_rad.c ${SIGMAD}/sigma_rtc.c ${SIGMAD}/sigma_tt.c
+SIGMA_OPT = -I ${SIGMAD}
+
+SEL32D = ${SIMHD}/SEL32
+SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
+	${SEL32D}/sel32_iop.c ${SEL32D}/sel32_com.c ${SEL32D}/sel32_con.c \
+	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
+	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
+	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
+	${SEL32D}/sel32_ec.c ${SEL32D}/sel32_ipu.c ${SEL32D}/sel32_defs.h
+SEL32_OPT = -I $(SEL32D) -DUSE_INT32 -DSEL32  ${NETWORK_OPT}
+
+###
+### Experimental simulators
+###
+
+CDC1700D = ${SIMHD}/CDC1700
+CDC1700 = ${CDC1700D}/cdc1700_cpu.c ${CDC1700D}/cdc1700_dis.c \
+        ${CDC1700D}/cdc1700_io.c ${CDC1700D}/cdc1700_sys.c \
+        ${CDC1700D}/cdc1700_dev1.c ${CDC1700D}/cdc1700_mt.c \
+        ${CDC1700D}/cdc1700_dc.c ${CDC1700D}/cdc1700_iofw.c \
+        ${CDC1700D}/cdc1700_lp.c ${CDC1700D}/cdc1700_dp.c \
+        ${CDC1700D}/cdc1700_cd.c ${CDC1700D}/cdc1700_sym.c \
+        ${CDC1700D}/cdc1700_rtc.c ${CDC1700D}/cdc1700_drm.c \
+        ${CDC1700D}/cdc1700_msos5.c
+CDC1700_OPT = -I ${CDC1700D}
+
+###
+### Unsupported/Incomplete simulators
+###
+
+ALPHAD = ${SIMHD}/alpha
+ALPHA = ${ALPHAD}/alpha_500au_syslist.c ${ALPHAD}/alpha_cpu.c \
+    ${ALPHAD}/alpha_ev5_cons.c ${ALPHAD}/alpha_ev5_pal.c \
+    ${ALPHAD}/alpha_ev5_tlb.c ${ALPHAD}/alpha_fpi.c \
+    ${ALPHAD}/alpha_fpv.c ${ALPHAD}/alpha_io.c \
+    ${ALPHAD}/alpha_mmu.c ${ALPHAD}/alpha_sys.c
+ALPHA_OPT = -I ${ALPHAD} -DUSE_ADDR64 -DUSE_INT64
+
+SAGED = ${SIMHD}/SAGE
+SAGE = ${SAGED}/sage_cpu.c ${SAGED}/sage_sys.c ${SAGED}/sage_stddev.c \
+    ${SAGED}/sage_cons.c ${SAGED}/sage_fd.c ${SAGED}/sage_lp.c \
+    ${SAGED}/m68k_cpu.c ${SAGED}/m68k_mem.c ${SAGED}/m68k_scp.c \
+    ${SAGED}/m68k_parse.tab.c ${SAGED}/m68k_sys.c \
+    ${SAGED}/i8251.c ${SAGED}/i8253.c ${SAGED}/i8255.c ${SAGED}/i8259.c ${SAGED}/i8272.c 
+SAGE_OPT = -I ${SAGED} -DHAVE_INT64
+
+PDQ3D = ${SIMHD}/PDQ-3
+PDQ3 = ${PDQ3D}/pdq3_cpu.c ${PDQ3D}/pdq3_sys.c ${PDQ3D}/pdq3_stddev.c \
+    ${PDQ3D}/pdq3_mem.c ${PDQ3D}/pdq3_debug.c ${PDQ3D}/pdq3_fdc.c 
+PDQ3_OPT = -I ${PDQ3D}
 
 #
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
+#ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
+#	vax microvax3900 microvax1 rtvax1000 microvax2 vax730 vax750 vax780 \
+#	vax8200 vax8600 besm6 \
+#	microvax2000 infoserver100 infoserver150vxt microvax3100 microvax3100e \
+#	vaxstation3100m30 vaxstation3100m38 vaxstation3100m76 vaxstation4000m60 \
+#	microvax3100m80 vaxstation4000vlc infoserver1000 \
+#	nd100 nova eclipse hp2100 hp3000 i1401 i1620 s3 altair altairz80 gri \
+#	i7094 ibm1130 id16 id32 sds lgp h316 cdc1700 \
+#	swtp6800mp-a swtp6800mp-a2 tx-0 ssem b5500 intel-mds \
+#	scelbi 3b2 3b2-700 i701 i704 i7010 i7070 i7080 i7090 \
+#	sigma uc15 pdp10-ka pdp10-ki pdp10-kl pdp10-ks pdp6 i650 \
+#	imlac tt2500 sel32 
 
-##ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp10-ks pdp6 ibm360 ibm360_32 icl1900 sel32
-ALL = sel32
+#all : ${ALL}
+all : sel32
 
-all : ${ALL}
+EXPERIMENTAL = alpha pdq3 sage
+
+experimental : ${EXPERIMENTAL}
 
 clean :
 ifeq (${WIN32},)
 ##	${RM} -rf ${BIN}
-	${RM} ${ALL}
-#	${RM} -rf BIN
+	${RM} sel32
 else
 	if exist BIN rmdir /s /q BIN
 endif
 
-ibm360: $(BIN)ibm360$(EXE)
-
-${BIN}ibm360${EXE}: ${IBM360} ${SIM}
+${BUILD_ROMS} : 
 	${MKDIRBIN}
-	${CC} ${IBM360} ${SIM} ${IBM360_OPT} $(CC_OUTSPEC) ${LDFLAGS}
-ifneq (,$(call find_test,${IBM360D},ibm360))
-	$@ $(call find_test,${IBM360D},ibm360) $(TEST_ARG)
+ifeq (${WIN32},)
+	@if ${TEST} \( ! -e $@ \) -o \( sim_BuildROMs.c -nt $@ \) ; then ${CC} sim_BuildROMs.c ${CC_OUTSPEC}; fi
+else
+	@if not exist $@ ${CC} sim_BuildROMs.c ${CC_OUTSPEC}
+endif
+	@$@
+
+#
+# Individual builds
+#
+pdp1 : ${BIN}pdp1${EXE}
+
+${BIN}pdp1${EXE} : ${PDP1} ${SIM}
+	${MKDIRBIN}
+	${CC} ${PDP1} ${SIM} ${PDP1_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP1D},pdp1))
+	$@ $(call find_test,${PDP1D},pdp1) ${TEST_ARG}
 endif
 
-ibm360_32: $(BIN)ibm360_32$(EXE)
+pdp4 : ${BIN}pdp4${EXE}
 
-${BIN}ibm360_32${EXE}: ${IBM360} ${SIM}
+${BIN}pdp4${EXE} : ${PDP18B} ${SIM}
 	${MKDIRBIN}
-	${CC} ${IBM360} ${SIM} ${IBM360_OPT32} $(CC_OUTSPEC) ${LDFLAGS}
-ifneq (,$(call find_test,${IBM360D},ibm360))
-	$@ $(call find_test,${IBM360D},ibm360) $(TEST_ARG)
+	${CC} ${PDP18B} ${SIM} ${PDP4_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP18BD},pdp4))
+	$@ $(call find_test,${PDP18BD},pdp4) ${TEST_ARG}
 endif
 
+pdp7 : ${BIN}pdp7${EXE}
 
-icl1900: $(BIN)icl1900$(EXE)
-
-${BIN}icl1900${EXE}: ${ICL1900} ${SIM}
+${BIN}pdp7${EXE} : ${PDP18B} ${PDP18BD}/pdp18b_dpy.c ${DISPLAYL} ${DISPLAY340} ${SIM}
 	${MKDIRBIN}
-	${CC} ${ICL1900} ${SIM} ${ICL1900_OPT} $(CC_OUTSPEC) ${LDFLAGS}
-ifneq (,$(call find_test,${ICL1900D},icl1900))
-	$@ $(call find_test,${ICL1900D},icl1900) $(TEST_ARG)
+	${CC} ${PDP18B} ${PDP18BD}/pdp18b_dpy.c ${DISPLAYL} ${DISPLAY340} ${SIM} ${PDP7_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP18BD},pdp7))
+	$@ $(call find_test,${PDP18BD},pdp7) ${TEST_ARG}
 endif
 
-sel32: $(BIN)sel32$(EXE)
+pdp8 : ${BIN}pdp8${EXE}
+
+${BIN}pdp8${EXE} : ${PDP8} ${SIM}
+	${MKDIRBIN}
+	${CC} ${PDP8} ${SIM} ${PDP8_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP8D},pdp8))
+	$@ $(call find_test,${PDP8D},pdp8) ${TEST_ARG}
+endif
+
+pdp9 : ${BIN}pdp9${EXE}
+
+${BIN}pdp9${EXE} : ${PDP18B} ${SIM}
+	${MKDIRBIN}
+	${CC} ${PDP18B} ${SIM} ${PDP9_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP18BD},pdp9))
+	$@ $(call find_test,${PDP18BD},pdp9) ${TEST_ARG}
+endif
+
+pdp15 : ${BIN}pdp15${EXE}
+
+${BIN}pdp15${EXE} : ${PDP18B} ${SIM}
+	${MKDIRBIN}
+	${CC} ${PDP18B} ${SIM} ${PDP15_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP18BD},pdp15))
+	$@ $(call find_test,${PDP18BD},pdp15) ${TEST_ARG}
+endif
+
+pdp10 : ${BIN}pdp10${EXE}
+
+${BIN}pdp10${EXE} : ${PDP10} ${SIM}
+	${MKDIRBIN}
+	${CC} ${PDP10} ${SIM} ${PDP10_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP10D},pdp10))
+	$@ $(call find_test,${PDP10D},pdp10) ${TEST_ARG}
+endif
+
+imlac : ${BIN}imlac${EXE}
+
+${BIN}imlac${EXE} : ${IMLAC} ${SIM}
+	${MKDIRBIN}
+	${CC} ${IMLAC} ${SIM} ${IMLAC_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${IMLAC},imlac))
+	$@ $(call find_test,${IMLACD},imlac) ${TEST_ARG}
+endif
+
+stub : ${BIN}stub${EXE}
+
+${BIN}stub${EXE} : ${STUB} ${SIM}
+	${MKDIRBIN}
+	${CC} ${STUB} ${SIM} ${STUB_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+
+tt2500 : ${BIN}tt2500${EXE}
+
+${BIN}tt2500${EXE} : ${TT2500} ${SIM}
+	${MKDIRBIN}
+	${CC} ${TT2500} ${SIM} ${TT2500_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${TT2500},tt2500))
+	$@ $(call find_test,${TT2500D},tt2500) ${TEST_ARG}
+endif
+
+pdp11 : ${BIN}pdp11${EXE}
+
+${BIN}pdp11${EXE} : ${PDP11} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${PDP11} ${SIM} ${PDP11_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP11D},pdp11))
+	$@ $(call find_test,${PDP11D},pdp11) ${TEST_ARG}
+endif
+
+uc15 : ${BIN}uc15${EXE}
+
+${BIN}uc15${EXE} : ${UC15} ${SIM}
+	${MKDIRBIN}
+	${CC} ${UC15} ${SIM} ${UC15_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP11D},uc15))
+	$@ $(call find_test,${PDP11D},uc15) ${TEST_ARG}
+endif
+
+microvax3900 : vax
+
+vax : ${BIN}vax${EXE}
+
+${BIN}vax${EXE} : ${VAX} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX} ${SIM} ${VAX_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifeq (${WIN32},)
+	cp ${BIN}vax${EXE} ${BIN}microvax3900${EXE}
+else
+	copy $(@D)\vax${EXE} $(@D)\microvax3900${EXE}
+endif
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+microvax2000 : ${BIN}microvax2000${EXE}
+
+${BIN}microvax2000${EXE} : ${VAX410} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX410} ${SCSI} ${SIM} ${VAX410_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+infoserver100 : ${BIN}infoserver100${EXE}
+
+${BIN}infoserver100${EXE} : ${VAX420} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX420} ${SCSI} ${SIM} ${VAX411_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+infoserver150vxt : ${BIN}infoserver150vxt${EXE}
+
+${BIN}infoserver150vxt${EXE} : ${VAX420} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX420} ${SCSI} ${SIM} ${VAX412_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+microvax3100 : ${BIN}microvax3100${EXE}
+
+${BIN}microvax3100${EXE} : ${VAX420} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX420} ${SCSI} ${SIM} ${VAX41A_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+microvax3100e : ${BIN}microvax3100e${EXE}
+
+${BIN}microvax3100e${EXE} : ${VAX420} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX420} ${SCSI} ${SIM} ${VAX41D_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vaxstation3100m30 : ${BIN}vaxstation3100m30${EXE}
+
+${BIN}vaxstation3100m30${EXE} : ${VAX420} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX420} ${SCSI} ${SIM} ${VAX42A_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vaxstation3100m38 : ${BIN}vaxstation3100m38${EXE}
+
+${BIN}vaxstation3100m38${EXE} : ${VAX420} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX420} ${SCSI} ${SIM} ${VAX42B_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vaxstation3100m76 : ${BIN}vaxstation3100m76${EXE}
+
+${BIN}vaxstation3100m76${EXE} : ${VAX43} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX43} ${SCSI} ${SIM} ${VAX43_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vaxstation4000m60 : ${BIN}vaxstation4000m60${EXE}
+
+${BIN}vaxstation4000m60${EXE} : ${VAX440} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX440} ${SCSI} ${SIM} ${VAX46_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+microvax3100m80 : ${BIN}microvax3100m80${EXE}
+
+${BIN}microvax3100m80${EXE} : ${VAX440} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX440} ${SCSI} ${SIM} ${VAX47_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vaxstation4000vlc : ${BIN}vaxstation4000vlc${EXE}
+
+${BIN}vaxstation4000vlc${EXE} : ${VAX440} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX440} ${SCSI} ${SIM} ${VAX48_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+infoserver1000 : ${BIN}infoserver1000${EXE}
+
+${BIN}infoserver1000${EXE} : ${IS1000} ${SCSI} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${IS1000} ${SCSI} ${SIM} ${IS1000_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+microvax1 : ${BIN}microvax1${EXE}
+
+${BIN}microvax1${EXE} : ${VAX610} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX610} ${SIM} ${VAX610_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+rtvax1000 : ${BIN}rtvax1000${EXE}
+
+${BIN}rtvax1000${EXE} : ${VAX630} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX630} ${SIM} ${VAX620_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+microvax2 : ${BIN}microvax2${EXE}
+
+${BIN}microvax2${EXE} : ${VAX630} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX630} ${SIM} ${VAX630_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vax730 : ${BIN}vax730${EXE}
+
+${BIN}vax730${EXE} : ${VAX730} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX730} ${SIM} ${VAX730_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vax750 : ${BIN}vax750${EXE}
+
+${BIN}vax750${EXE} : ${VAX750} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX750} ${SIM} ${VAX750_OPT} -o $@ ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vax780 : ${BIN}vax780${EXE}
+
+${BIN}vax780${EXE} : ${VAX780} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX780} ${SIM} ${VAX780_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vax8200 : ${BIN}vax8200${EXE}
+
+${BIN}vax8200${EXE} : ${VAX8200} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX8200} ${SIM} ${VAX8200_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+vax8600 : ${BIN}vax8600${EXE}
+
+${BIN}vax8600${EXE} : ${VAX8600} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${VAX8600} ${SIM} ${VAX8600_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${VAXD},vax-diag))
+	$@ $(call find_test,${VAXD},vax-diag) ${TEST_ARG}
+endif
+
+nd100 : ${BIN}nd100${EXE}
+
+${BIN}nd100${EXE} : ${ND100} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ND100} ${SIM} ${ND100_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ND100D},nd100))
+	$@ $(call find_test,${ND100D},nd100) ${TEST_ARG}
+endif
+
+nova : ${BIN}nova${EXE}
+
+${BIN}nova${EXE} : ${NOVA} ${SIM}
+	${MKDIRBIN}
+	${CC} ${NOVA} ${SIM} ${NOVA_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${NOVAD},nova))
+	$@ $(call find_test,${NOVAD},nova) ${TEST_ARG}
+endif
+
+eclipse : ${BIN}eclipse${EXE}
+
+${BIN}eclipse${EXE} : ${ECLIPSE} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ECLIPSE} ${SIM} ${ECLIPSE_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${NOVAD},eclipse))
+	$@ $(call find_test,${NOVAD},eclipse) ${TEST_ARG}
+endif
+
+h316 : ${BIN}h316${EXE}
+
+${BIN}h316${EXE} : ${H316} ${SIM}
+	${MKDIRBIN}
+	${CC} ${H316} ${SIM} ${H316_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${H316D},h316))
+	$@ $(call find_test,${H316D},h316) ${TEST_ARG}
+endif
+
+hp2100 : ${BIN}hp2100${EXE}
+
+${BIN}hp2100${EXE} : ${HP2100} ${SIM}
+ifneq (1,${CPP_BUILD}${CPP_FORCE})
+	${MKDIRBIN}
+	${CC} ${HP2100} ${SIM} ${HP2100_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${HP2100D},hp2100))
+	$@ $(call find_test,${HP2100D},hp2100) ${TEST_ARG}
+endif
+else
+	$(info hp2100 can not be built using C++)
+endif
+
+hp3000 : ${BIN}hp3000${EXE}
+
+${BIN}hp3000${EXE} : ${HP3000} ${SIM}
+ifneq (1,${CPP_BUILD}${CPP_FORCE})
+	${MKDIRBIN}
+	${CC} ${HP3000} ${SIM} ${HP3000_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${HP3000D},hp3000))
+	$@ $(call find_test,${HP3000D},hp3000) ${TEST_ARG}
+endif
+else
+	$(info hp3000 can not be built using C++)
+endif
+
+i1401 : ${BIN}i1401${EXE}
+
+${BIN}i1401${EXE} : ${I1401} ${SIM}
+	${MKDIRBIN}
+	${CC} ${I1401} ${SIM} ${I1401_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${I1401D},i1401))
+	$@ $(call find_test,${I1401D},i1401) ${TEST_ARG}
+endif
+
+i1620 : ${BIN}i1620${EXE}
+
+${BIN}i1620${EXE} : ${I1620} ${SIM}
+	${MKDIRBIN}
+	${CC} ${I1620} ${SIM} ${I1620_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${I1620D},i1620))
+	$@ $(call find_test,${I1620D},i1620) ${TEST_ARG}
+endif
+
+i7094 : ${BIN}i7094${EXE}
+
+${BIN}i7094${EXE} : ${I7094} ${SIM}
+	${MKDIRBIN}
+	${CC} ${I7094} ${SIM} ${I7094_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${I7094D},i7094))
+	$@ $(call find_test,${I7094D},i7094) ${TEST_ARG}
+endif
+
+ibm1130 : ${BIN}ibm1130${EXE}
+
+${BIN}ibm1130${EXE} : ${IBM1130}
+ifneq (1,${CPP_BUILD}${CPP_FORCE})
+	${MKDIRBIN}
+ifneq (${WIN32},)
+	windres ${IBM1130D}/ibm1130.rc ${BIN}ibm1130.o
+endif
+	${CC} ${IBM1130} ${SIM} ${IBM1130_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (${WIN32},)
+	del BIN\ibm1130.o
+endif
+ifneq (,$(call find_test,${IBM1130D},ibm1130))
+	$@ $(call find_test,${IBM1130D},ibm1130) ${TEST_ARG}
+endif
+else
+	$(info ibm1130 can not be built using C++)
+endif
+
+s3 : ${BIN}s3${EXE}
+
+${BIN}s3${EXE} : ${S3} ${SIM}
+	${MKDIRBIN}
+	${CC} ${S3} ${SIM} ${S3_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${S3D},s3))
+	$@ $(call find_test,${S3D},s3) ${TEST_ARG}
+endif
+
+sel32: ${BIN}sel32${EXE}
 
 ${BIN}sel32${EXE}: ${SEL32} ${SIM}
 	${MKDIRBIN}
@@ -1561,9 +2661,201 @@ ${BIN}sel32${EXE}: ${SEL32} ${SIM}
 ##ifneq (,$(call find_test,${SEL32D},sel32))
 ##	$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
 ##endif
-##ifneq (,$(call find_test,${SEL32D},sel32))
-##	${SEL32D}/sel32 $(call find_test,${SEL32D},sel32) $(TEST_ARG)
-##endif
+
+altair : ${BIN}altair${EXE}
+
+${BIN}altair${EXE} : ${ALTAIR} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ALTAIR} ${SIM} ${ALTAIR_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ALTAIRD},altair))
+	$@ $(call find_test,${ALTAIRD},altair) ${TEST_ARG}
+endif
+
+altairz80 : ${BIN}altairz80${EXE}
+
+${BIN}altairz80${EXE} : ${ALTAIRZ80} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ALTAIRZ80} ${SIM} ${ALTAIRZ80_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ALTAIRZ80D},altairz80))
+	$@ $(call find_test,${ALTAIRZ80D},altairz80) ${TEST_ARG}
+endif
+
+gri : ${BIN}gri${EXE}
+
+${BIN}gri${EXE} : ${GRI} ${SIM}
+	${MKDIRBIN}
+	${CC} ${GRI} ${SIM} ${GRI_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${GRID},gri))
+	$@ $(call find_test,${GRID},gri) ${TEST_ARG}
+endif
+
+lgp : ${BIN}lgp${EXE}
+
+${BIN}lgp${EXE} : ${LGP} ${SIM}
+	${MKDIRBIN}
+	${CC} ${LGP} ${SIM} ${LGP_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${LGPD},lgp))
+	$@ $(call find_test,${LGPD},lgp) ${TEST_ARG}
+endif
+
+id16 : ${BIN}id16${EXE}
+
+${BIN}id16${EXE} : ${ID16} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ID16} ${SIM} ${ID16_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ID32D},id16))
+	$@ $(call find_test,${ID32D},id16) ${TEST_ARG}
+endif
+
+id32 : ${BIN}id32${EXE}
+
+${BIN}id32${EXE} : ${ID32} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ID32} ${SIM} ${ID32_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ID32D},id32))
+	$@ $(call find_test,${ID32D},id32) ${TEST_ARG}
+endif
+
+sds : ${BIN}sds${EXE}
+
+${BIN}sds${EXE} : ${SDS} ${SIM}
+	${MKDIRBIN}
+	${CC} ${SDS} ${SIM} ${SDS_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${SDSD},sds))
+	$@ $(call find_test,${SDSD},sds) ${TEST_ARG}
+endif
+
+swtp6800mp-a : ${BIN}swtp6800mp-a${EXE}
+
+${BIN}swtp6800mp-a${EXE} : ${SWTP6800MP-A} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${SWTP6800MP-A} ${SIM} ${SWTP6800_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${SWTP6800D},swtp6800mp-a))
+	$@ $(call find_test,${SWTP6800D},swtp6800mp-a) ${TEST_ARG}
+endif
+
+swtp6800mp-a2 : ${BIN}swtp6800mp-a2${EXE}
+
+${BIN}swtp6800mp-a2${EXE} : ${SWTP6800MP-A2} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${SWTP6800MP-A2} ${SIM} ${SWTP6800_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${SWTP6800D},swtp6800mp-a2))
+	$@ $(call find_test,${SWTP6800D},swtp6800mp-a2) ${TEST_ARG}
+endif
+
+intel-mds: ${BIN}intel-mds${EXE}
+
+${BIN}intel-mds${EXE} : ${INTEL_MDS} ${SIM} ${BUILD_ROMS}
+	${MKDIRBIN}
+	${CC} ${INTEL_MDS} ${SIM} ${INTEL_MDS_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${INTEL_MDSD},intel-mds))
+	$@ $(call find_test,${INTEL_MDSD},intel-mds) ${TEST_ARG}
+endif
+
+ibmpc: ${BIN}ibmpc${EXE}
+
+${BIN}ibmpc${EXE} : ${IBMPC} ${SIM} ${BUILD_ROMS}
+	#cmake:ignore-target
+	${MKDIRBIN}
+	${CC} ${IBMPC} ${SIM} ${IBMPC_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${IBMPCD},ibmpc))
+	$@ $(call find_test,${IBMPCD},ibmpc) ${TEST_ARG}
+endif
+
+ibmpcxt: ${BIN}ibmpcxt${EXE}
+
+${BIN}ibmpcxt${EXE} : ${IBMPCXT} ${SIM} ${BUILD_ROMS}
+	#cmake:ignore-target
+	${MKDIRBIN}
+	${CC} ${IBMPCXT} ${SIM} ${IBMPCXT_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${IBMPCXTD},ibmpcxt))
+	$@ $(call find_test,${IBMPCXTD},ibmpcxt) ${TEST_ARG}
+endif
+
+scelbi: ${BIN}scelbi${EXE}
+
+${BIN}scelbi${EXE} : ${SCELBI} ${SIM}
+	${MKDIRBIN}
+	${CC} ${SCELBI} ${SIM} ${SCELBI_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${SCELBID},scelbi))
+	$@ $(call find_test,${SCELBID},scelbi) ${TEST_ARG}
+endif
+
+tx-0 : ${BIN}tx-0${EXE}
+
+${BIN}tx-0${EXE} : ${TX0} ${SIM}
+	${MKDIRBIN}
+	${CC} ${TX0} ${SIM} ${TX0_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${TX0D},tx-0))
+	$@ $(call find_test,${TX0D},tx-0) ${TEST_ARG}
+endif
+
+ssem : ${BIN}ssem${EXE}
+
+${BIN}ssem${EXE} : ${SSEM} ${SIM}
+	${MKDIRBIN}
+	${CC} ${SSEM} ${SIM} ${SSEM_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${SSEMD},ssem))
+	$@ $(call find_test,${SSEMD},ssem) ${TEST_ARG}
+endif
+
+cdc1700 : ${BIN}cdc1700${EXE}
+
+${BIN}cdc1700${EXE} : ${CDC1700} ${SIM}
+	${MKDIRBIN}
+	${CC} ${CDC1700} ${SIM} ${CDC1700_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${CDC1700D},cdc1700))
+	$@ $(call find_test,${CDC1700D},cdc1700) ${TEST_ARG}
+endif
+
+besm6 : ${BIN}besm6${EXE}
+
+${BIN}besm6${EXE} : ${BESM6} ${SIM}
+ifneq (1,${CPP_BUILD}${CPP_FORCE})
+	${MKDIRBIN}
+	${CC} ${BESM6} ${SIM} ${BESM6_OPT} ${BESM6_PANEL_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${BESM6D},besm6))
+	$@ $(call find_test,${BESM6D},besm6) ${TEST_ARG}
+endif
+else
+	$(info besm6 can not be built using C++)
+endif
+
+sigma : ${BIN}sigma${EXE}
+
+${BIN}sigma${EXE} : ${SIGMA} ${SIM}
+	${MKDIRBIN}
+	${CC} ${SIGMA} ${SIM} ${SIGMA_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${SIGMAD},sigma))
+	$@ $(call find_test,${SIGMAD},sigma) ${TEST_ARG}
+endif
+
+alpha : ${BIN}alpha${EXE}
+
+${BIN}alpha${EXE} : ${ALPHA} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ALPHA} ${SIM} ${ALPHA_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ALPHAD},alpha))
+	$@ $(call find_test,${ALPHAD},alpha) ${TEST_ARG}
+endif
+
+sage : ${BIN}sage${EXE}
+
+${BIN}sage${EXE} : ${SAGE} ${SIM}
+	${MKDIRBIN}
+	${CC} ${SAGE} ${SIM} ${SAGE_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${SAGED},sage))
+	$@ $(call find_test,${SAGED},sage) ${TEST_ARG}
+endif
+
+pdq3 : ${BIN}pdq3${EXE}
+
+${BIN}pdq3${EXE} : ${PDQ3} ${SIM}
+	${MKDIRBIN}
+	${CC} ${PDQ3} ${SIM} ${PDQ3_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDQ3D},pdq3))
+	$@ $(call find_test,${PDQ3D},pdq3) ${TEST_ARG}
+endif
 
 b5500 : ${BIN}b5500${EXE}
 
@@ -1572,6 +2864,31 @@ ${BIN}b5500${EXE} : ${B5500} ${SIM}
 	${CC} ${B5500} ${SIM} ${B5500_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${B5500D},b5500))
 	$@ $(call find_test,${B5500D},b5500) ${TEST_ARG}
+endif
+
+3b2-400 : 3b2
+
+3b2 : ${BIN}3b2${EXE}
+ 
+${BIN}3b2${EXE} : ${ATT3B2M400} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ATT3B2M400} ${SIM} ${ATT3B2M400_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifeq (${WIN32},)
+	cp ${BIN}3b2${EXE} ${BIN}3b2-400${EXE}
+else
+	copy $(@D)\3b2${EXE} $(@D)\3b2-400${EXE}
+endif
+ifneq (,$(call find_test,${ATT3B2D},3b2))
+	$@ $(call find_test,${ATT3B2D},3b2) ${TEST_ARG}
+endif
+
+3b2-700 : ${BIN}3b2-700${EXE}
+
+${BIN}3b2-700${EXE} : ${ATT3B2M700} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ATT3B2M700} ${SCSI} ${SIM} ${ATT3B2M700_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${ATT3B2D},3b2-700))
+	$@ $(call find_test,${ATT3B2D},3b2-700) ${TEST_ARG}
 endif
 
 i7090 : ${BIN}i7090${EXE}
@@ -1628,6 +2945,15 @@ ifneq (,$(call find_test,${I701D},i701))
 	$@ $(call find_test,${I701D},i701) ${TEST_ARG}
 endif
 
+i650 : ${BIN}i650${EXE}
+
+${BIN}i650${EXE} : ${I650} ${SIM} 
+	${MKDIRBIN}
+	${CC} ${I650} ${SIM} ${I650_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${I650D},i650))
+	$@ $(call find_test,${I650D},i650) ${TEST_ARG}
+endif
+
 pdp6 : ${BIN}pdp6${EXE}
 
 ${BIN}pdp6${EXE} : ${PDP6} ${SIM}
@@ -1673,4 +2999,12 @@ ifneq (,$(call find_test,${PDP10D},ks10))
 	$@ $(call find_test,${PDP10D},ks10) ${TEST_ARG}
 endif
 
+# Front Panel API Demo/Test program
+
+frontpaneltest : ${BIN}frontpaneltest${EXE}
+
+${BIN}frontpaneltest${EXE} : frontpanel/FrontPanelTest.c sim_sock.c sim_frontpanel.c
+	#cmake:ignore-target
+	${MKDIRBIN}
+	${CC} frontpanel/FrontPanelTest.c sim_sock.c sim_frontpanel.c ${CC_OUTSPEC} ${LDFLAGS} ${OS_CURSES_DEFS}
 
